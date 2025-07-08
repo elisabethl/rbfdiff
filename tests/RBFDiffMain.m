@@ -1,8 +1,8 @@
 clear
 close all
 % The idea is to test both RBFInterpMat and RBFDiffMat
-phi = {'rbfqr','gs','mq'};
-pdeg = [-1 -1 3];
+phi = {'gs','mq'};
+pdeg = [-1 3];
 dim = 3;
 N = 56; % For 1D, 8 is a good number, 2D: 28, 3D:56
 Ne = N*4;
@@ -17,25 +17,31 @@ end
 % We let the domain be a disc or a sphere centered in the origin + 1*n_x
 % The node points are Halton nodes without clustering
 %
-shift = zeros(1,dim); shift(1) = 1;
+% shift = zeros(1,dim); shift(1) = 1;
+shift = [-1,3.2,-4];
 R = 1;
 
 dimRat = [1 1.2*4/pi 1.2*8/(4*pi/3)];
 Nin = ceil(dimRat(dim)*N);
-xc = 2*(halton(Nin,dim)-0.5);
-r2 = sum(xc.^2,2);
-pos = find(r2<=R);
-pos = pos(1:N);
-xc = xc(pos,:) + shift; 
+% xc = 2*(halton(Nin,dim)-0.5);
+% r2 = sum(xc.^2,2);
+% pos = find(r2<=R);
+% pos = pos(1:N);
+% xc = xc(pos,:) + shift; 
+xc = [2,5,1].*(halton(N,dim)-0.5);
+xc = xc + shift;
 %
 % We do the same for the evaluation points
 %
 Nin = ceil(dimRat(dim)*Ne);
-xe = 2*(halton(Nin,dim)-0.5);
-r2 = sum(xe.^2,2);
-pos = find(r2<=R);
-pos = pos(1:Ne);
-xe = xe(pos,:) + shift;
+% xe = 2*(halton(Nin,dim)-0.5);
+% r2 = sum(xe.^2,2);
+% pos = find(r2<=R);
+% pos = pos(1:Ne);
+% xe = xe(pos,:) + shift;
+xe = [2,5,1].*(halton(Ne,dim)-0.5);
+R = max(sqrt(sum(xc.^2,2)));
+xe = xe + shift;
 
 uc = fun(xc);
 ue = fun(xe);
@@ -53,8 +59,8 @@ for j=1:length(epvec)
         % Compute the differentiation matrices
         %
         [B,Te] = RBFDiffMat(0,Psi,xe);
-        [Bx,Te] = RBFDiffMat(1,Psi,Te);
-        [BL,Te] = RBFDiffMat(1.5,Psi,Te);
+        [Bx,Te] = RBFDiffMat(1,Psi,xe);
+        [BL,Te] = RBFDiffMat(1.5,Psi,xe);
         %
         % Apply them to the right hand side
         %
@@ -65,6 +71,7 @@ for j=1:length(epvec)
         %
         erru(j,k) = max(abs(u-ue));
         errL(j,k) = max(abs(Lu-uxxe));
+        disp(j)
     end
 end
 

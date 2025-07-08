@@ -60,10 +60,9 @@ else
     %
     % Scaling of the domain
     %
-    % rr = Psi.rr;
-    % cc = Psi.cc;
-    % Te = (xe - cc)./rr;  % In case the call is made with Te as an output
-    Te = xe;
+    rr = Psi.rr;
+    cc = Psi.cc;
+    Te = (xe - cc)./rr;  % In case the call is made with Te as an output
     dim = size(Te,2);    
     compTrue = 0;
     if (ndiff > 0 & ndiff~=1.5) % Evaluation or Laplacian
@@ -92,7 +91,7 @@ else
         B = (B/Psi.U)/Psi.L; % Double check this again
         B(:,Psi.piv) = B;
         B = B(:,1:end-np);
-        % B = (1/rr).^op{k}*B;
+        B = (1/rr).^ceil(sum(ndiff))*B;
         Bout{k} = B;
     end
     %
