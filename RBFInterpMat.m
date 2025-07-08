@@ -57,7 +57,29 @@ if strcmp(phi,'rbfqr')
     Psi.phi = phi;
 else
     %
-    % RBF-direct. Compute the distance matrix
+    % Scale the points and shape parameter based on the given inputs
+    %
+    % if (narg == 2)
+    %     cc = varargin{1};
+    %     rr = varargin{2};
+    % elseif (narg==1)
+    %     xe = varargin{1};
+    %     cc = mean(xe);
+    %     xe = xe - cc;
+    %     re = sqrt(sum(xe.^2,2));
+    %     rr = max(re);
+    % end
+    % 
+    % xc = xc - cc;
+    % rc = sqrt(sum(xc.^2,2));
+    % rr = max(max(rc),rr);
+    % Psi.rr = rr;
+    % Psi.cc = cc;
+    % 
+    % xc = xc./rr; 
+    % ep = ep*rr;
+    %
+    % RBF-Direct. Compute distance matrix
     %
     rc = xcdist(xc);
     A = RBFmat(phi,ep,rc,'0');

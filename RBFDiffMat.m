@@ -57,13 +57,19 @@ if strcmp(Psi.phi,'rbfqr')
     end  
 else
     xe = xTe; % Should always be the case for the direct method
-    Te = xe;  % In case the call is made with Te as an output
-    dim = size(xe,2);    
+    %
+    % Scaling of the domain
+    %
+    % rr = Psi.rr;
+    % cc = Psi.cc;
+    % Te = (xe - cc)./rr;  % In case the call is made with Te as an output
+    Te = xe;
+    dim = size(Te,2);    
     compTrue = 0;
     if (ndiff > 0 & ndiff~=1.5) % Evaluation or Laplacian
         compTrue = 1; % Meaning that we need component distances as well
     end    
-    re = xcdist(xe,Psi.xc,compTrue);
+    re = xcdist(Te,Psi.xc,compTrue);
     [op,opDim,derVec]=getOpDirect(ndiff,dim);
     for k=1:length(op)
         B = RBFmat(Psi.phi,Psi.ep,re,op{k},opDim{k});
@@ -73,9 +79,9 @@ else
             %
             % Add polynomial terms
             %
-            P = polyMat(xe,Psi.pdeg,derVec{k}(1,:));
+            P = polyMat(Te,Psi.pdeg,derVec{k}(1,:));
             for j=2:size(derVec,1)
-                P = P + polyMat(xe,Psi.pdeg,derVec{k}(j,:));
+                P = P + polyMat(Te,Psi.pdeg,derVec{k}(j,:));
             end    
             np = size(P,2);
             B = [B P];
@@ -86,6 +92,7 @@ else
         B = (B/Psi.U)/Psi.L; % Double check this again
         B(:,Psi.piv) = B;
         B = B(:,1:end-np);
+        % B = (1/rr).^op{k}*B;
         Bout{k} = B;
     end
     %

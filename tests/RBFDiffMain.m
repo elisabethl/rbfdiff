@@ -71,3 +71,9 @@ end
 figure
 loglog(epvec,erru)
 legend('RBF-QR','GS','MQ+p3')
+title("Evaluation error")
+
+figure
+loglog(epvec,errL)
+legend('RBF-QR','GS','MQ+p3')
+title("Laplace error")
