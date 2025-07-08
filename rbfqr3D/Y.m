@@ -53,7 +53,7 @@ z = cos(th);
 cosfi = cos(t); sinfi = sin(t);
 for m=mmin+1:mu
     %   p = legendre(m,z,'norm')'; % We need the normalization 'norm'.
-    [p,pth,p_over_s,pthth,pfifi,pthfi] = legendre_modified(m,z,'norm');
+    [p,pth,p_over_s,pthth,pfifi,pthfi] = normalizedLegendre(m,z);
     p = p.'; pth = pth.'; p_over_s = p_over_s.'; pthth = pthth.';
     pfifi = pfifi.'; pthfi=pthfi.';
     YY(:,m+1,m+1) = c*p(:,1);
