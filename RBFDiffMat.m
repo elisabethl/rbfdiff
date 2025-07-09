@@ -63,6 +63,7 @@ else
     rr = Psi.rr;
     cc = Psi.cc;
     Te = (xe - cc)./rr;  % In case the call is made with Te as an output
+    % Te = xe;
     dim = size(Te,2);    
     compTrue = 0;
     if (ndiff > 0 & ndiff~=1.5) % Evaluation or Laplacian
