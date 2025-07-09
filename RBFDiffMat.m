@@ -103,12 +103,12 @@ else
         B = Bout;
     elseif (ndiff==2)
         clear B
-        pos = 1;
-        for k=1:dim
-            for j=k+1:dim
-                B{k,j} = Bout{pos};
-                B{j,k} = B{k,j};
-                pos = pos + 1;
+        for k = 1:length(op)
+            if length(opDim{k}) == 1 
+                B{opDim{k},opDim{k}} = Bout{k};
+            else
+                B{opDim{k}(1),opDim{k}(2)} = Bout{k};
+                B{opDim{k}(2),opDim{k}(1)} = Bout{k};
             end
         end
     end    
