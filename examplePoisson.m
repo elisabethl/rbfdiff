@@ -3,13 +3,13 @@ clear all
 setPaths;
 
 dim = 2;
-N = 100;
+N = 500;
 q = 3;
 Ne = q*N;
-n = 5; % stencil size
 ep = 1;
 phi = 'r3';
-pdeg = 8;
+pdeg = 4;
+n = 2*nchoosek(pdeg+dim,dim); % stencil size
 
 C = zeros(1,dim);
 R = 1;
@@ -28,6 +28,7 @@ xc = xc(pos,:) + C;
 Nb = ceil(2*pi*R/max(dist(:,2)));
 xcB = [R*cos(linspace(0,2*pi,Nb)'), R*sin(linspace(0,2*pi,Nb)')];
 xc = [xc; xcB];
+N = length(xc);
 %
 % We do the same for the evaluation points
 %
@@ -41,12 +42,33 @@ Nb = ceil(2*pi*R/max(dist(:,2)));
 xcB = [R*cos(linspace(0,2*pi,Nb)'), R*sin(linspace(0,2*pi,Nb)')];
 xe = [xe; xcB];
 
+Lglobal = zeros(N,N);
 for i = 1:N
-    [id,~] = knnsearch(xc,xc(1,:),'K',n);
+    [id,~] = knnsearch(xc,xc(i,:),'K',n);
     xcLoc = xc(id,:);
     Psi = RBFInterpMat(phi,pdeg,ep,xcLoc,xcLoc);
 
-    L = RBFDiffMat(1.5,Psi,xcLoc(1,:));
+    L = RBFDiffMat(1.5,Psi,xcLoc(1));
     
-
+    Lglobal(id(1),id) = L + Lglobal(id(1),id);
 end
+
+fun = @(x,y) sin(2.*pi.*x.*y);
+lapFun = @(x,y) - 4.*(x.^2).*(pi.^2).*sin(2.*pi.*x.*y) - 4.*(y.^2).*(pi.^2).*sin(2.*pi.*x.*y);
+
+uc = fun(xc(:,1),xc(:,2));
+lapAnalytic = lapFun(xc(:,1),xc(:,2));
+
+lapNumeric = Lglobal*uc;
+
+figure
+scatter(xc(:,1),xc(:,2),[],lapAnalytic,'filled'); axis equal
+colorbar
+title("Exact laplacian")
+figure()
+scatter(xc(:,1),xc(:,2),[],lapNumeric,'filled'); axis equal
+colorbar
+title("Numeric laplacian")
+
+error = norm(lapAnalytic-lapNumeric,2)/norm(lapAnalytic,2);
+disp(['Laplacian error = ', num2str(error)])
