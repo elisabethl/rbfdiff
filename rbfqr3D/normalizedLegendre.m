@@ -2,10 +2,12 @@ function [P, dPdth, pOverS, dPdth2, A, B] = normalizedLegendre(l, x)
 %
 % Computes "normalized" associated Legendre polynomials, P, of degree l and
 % order m = 0,..,l on point set x. The "normalized" associated Legendre 
-% polynomials are used to compute the spherical harmonics Y(t,phi) = c*P(cos(t))*exp(i*m*phi).
+% polynomials are used to compute spherical harmonics Y(t,phi) = c*P(cos(t))*exp(i*m*phi).
 % The normalization factor is ((-1).^m)*sqrt(((2*l + 1)/2)*(factorial(l-m)/factorial(l+m))). 
-% The function also computes the first and second derivatives of P with respect to t, the function
-% P/sqrt(1-x^2) and combinations A, B.
+% The function also computes dPdth, dPdth2 which are the first and second derivatives of P 
+% with respect to t, the function P/sqrt(1-x^2) and combinations A, B. 
+% A = (-m^2/(1-x^2))*P(cos(t)) + (x/sqrt(1-x^2))*dP(cos(t))/dt
+% and B = -m*((1/(1-x^2))*P(cos(t)) + (x/sqrt(1-x^2))*dP(cos(t))/dt)
 %
 %--- l(int)   : Degree of associated Legendre polynomial
 %--- x(1:N,1) : Range of values to compute the polynomial and derivatives

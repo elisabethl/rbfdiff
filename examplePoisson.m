@@ -7,9 +7,9 @@ N = 100;
 q = 3;
 Ne = q*N;
 n = 5; % stencil size
-ep = 0.1;
+ep = 1;
 phi = 'r3';
-pdeg = 2;
+pdeg = 8;
 
 C = zeros(1,dim);
 R = 1;
@@ -44,5 +44,9 @@ xe = [xe; xcB];
 for i = 1:N
     [id,~] = knnsearch(xc,xc(1,:),'K',n);
     xcLoc = xc(id,:);
-    Psi = RBFInterpMat(phi,pdeg,ep,xcLoc);
+    Psi = RBFInterpMat(phi,pdeg,ep,xcLoc,xcLoc);
+
+    L = RBFDiffMat(1.5,Psi,xcLoc(1,:));
+    
+
 end
