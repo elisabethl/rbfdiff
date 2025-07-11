@@ -80,7 +80,7 @@ else
             % Add polynomial terms
             %
             P = polyMat(Te,Psi.pdeg,derVec{k}(1,:));
-            for j=2:size(derVec,1)
+            for j=2:size(derVec{k},1)
                 P = P + polyMat(Te,Psi.pdeg,derVec{k}(j,:));
             end    
             np = size(P,2);
@@ -129,7 +129,7 @@ elseif (ndiff==1)
     end
 elseif (ndiff==1.5)
     op{1} = 'L';
-    opDim{1} = 1;
+    opDim{1} = dim;
     derVec{1} = 2*I;
 elseif (ndiff==2)
     pos = 1;
