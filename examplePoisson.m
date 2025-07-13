@@ -6,10 +6,11 @@ setPaths;
 % dimensional ball using the available RBF routines.
 %
 dim = 2;                        % dim = 1,2 or 3
-Nin = 1000; 
+h = 0.1;                        % approximate fill distance
+Nin = floor(1/(0.5*h))^dim;
 ep = 1;                         % Not relevant for 'r3' basis
 phi = 'r3';
-pdeg = 3;
+pdeg = 2;
 n = 2*nchoosek(pdeg+dim,dim);   % stencil size
 %
 % We place halton points in a line/circle/sphere centred at C and stretched with R
