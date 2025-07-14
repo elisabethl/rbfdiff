@@ -6,14 +6,10 @@ setPaths;
 % dimensional ball using the available RBF routines.
 %
 dim = 2;                        % dim = 1,2 or 3
-hVec = [0.5 0.2 0.1 0.08 0.05 0.03 0.02 0.01];                        % approximate fill distance
-for l = 1:length(hVec)
-    h = hVec(l);
-% h = 0.2;                        % approximate fill distance
-ep = 1;                         % Not relevant for 'r3' basis
-phi = 'r3';
-pdeg = 4;
-n = 2*nchoosek(pdeg+dim,dim);   % stencil size
+h = 0.1;                        % approximate fill distance
+ep = 0.1;                         % Not relevant for 'r3' basis
+phi = 'rbfqr';
+pdeg = -1;
 %
 % We place halton points in a line/circle/sphere centred at C with radius R
 %
@@ -50,31 +46,11 @@ xAll = [xc; xcB]; % Interior and boundary points (all centres for collocation)
 N = length(xAll);
 Nb = length(xcB);
 %
-% Constructing global RBF-FD approximation to Laplace operator Nin x N
+% Constructing global Kansa approximation to Laplace and boundary operators
 %
-Lglobal = spalloc(Nin,N,Nin*n);
-for i = 1:Nin
-    [id,~] = knnsearch(xAll,xc(i,:),'K',n);
-    xcLoc = xAll(id,:); % stencil
-    Psi = RBFInterpMat(phi,pdeg,ep,xcLoc,xcLoc(1,:),max(sqrt(sum((xcLoc-xcLoc(1,:)).^2,2))));
-
-    L = RBFDiffMat(1.5,Psi,xcLoc(1,:));
-
-    Lglobal(i,id) = L + Lglobal(i,id);
-end
-%
-% Constructing global RBF-FD approximation to Dirichlet boundary operator Nb x N
-%
-Bglobal = spalloc(Nb,N,Nb*n);
-for i = 1:Nb
-    [id,~] = knnsearch(xAll,xcB(i,:),'K',n);
-    xcLoc = xAll(id,:);
-    Psi = RBFInterpMat(phi,pdeg,ep,xcLoc,xcLoc(1,:),max(sqrt(sum((xcLoc-xcLoc(1,:)).^2,2))));
-
-    B = RBFDiffMat(0,Psi,xcLoc(1,:));
-
-    Bglobal(i,id) = B + Bglobal(i,id);
-end
+Psi = RBFInterpMat(phi,pdeg,ep,xAll,C,R);
+Lglobal = RBFDiffMat(1.5,Psi,xc);
+Bglobal = RBFDiffMat(0,Psi,xcB);
 %
 % Manufactured solution to construct forcing and BC
 %
@@ -83,19 +59,22 @@ if dim == 1
     lapFun = @(x) -4.*(pi.^2).*sin(2.*pi.*x);
     F = [lapFun(xc(:,1)); fun(xcB(:,1))];
     uc = fun(xAll(:,1));
-    lapAnalytic = lapFun(xc(:,1));
+    lapAnalytic = lapFun(xc(:,1)); 
+    bndAnalytic = fun(xcB(:,1));
 elseif dim == 2
     fun = @(x,y) sin(2.*pi.*x.*y);
     lapFun = @(x,y) - 4.*(x.^2).*(pi.^2).*sin(2.*pi.*x.*y) - 4.*(y.^2).*(pi.^2).*sin(2.*pi.*x.*y);
     F = [lapFun(xc(:,1),xc(:,2)); fun(xcB(:,1),xcB(:,2))];
     uc = fun(xAll(:,1),xAll(:,2));
-    lapAnalytic = lapFun(xc(:,1),xc(:,2));
+    lapAnalytic = lapFun(xc(:,1),xc(:,2));  
+    bndAnalytic = fun(xcB(:,1),xcB(:,2));
 elseif dim == 3
     fun = @(x,y,z) sin(2.*pi.*x.*y.*z);
     lapFun = @(x,y,z) - 4.*(x.^2).*(y.^2).*(pi.^2).*sin(2.*pi.*x.*y.*z) - 4.*(y.^2).*(z.^2).*(pi.^2).*sin(2.*pi.*x.*y.*z) - 4.*(x.^2).*(z.^2).*(pi.^2).*sin(2.*pi.*x.*y.*z);
     F = [lapFun(xc(:,1),xc(:,2),xc(:,3)); fun(xcB(:,1),xcB(:,2),xcB(:,3))];
     uc = fun(xAll(:,1),xAll(:,2),xAll(:,3));
-    lapAnalytic = lapFun(xc(:,1),xc(:,2),xc(:,3));
+    lapAnalytic = lapFun(xc(:,1),xc(:,2),xc(:,3));    
+    bndAnalytic = fun(xcB(:,1),xcB(:,2),xcB(:,3));
 end 
 
 A = [Lglobal; Bglobal];
@@ -143,21 +122,6 @@ elseif dim == 2
     zlabel("$$u-u_E$$","Interpreter","latex","FontSize",24)
     set(G,'EdgeColor','none')
     shading interp
-
-    figure()
-    xBplot = C + [R*cos(linspace(0,2*pi,1000))', R*sin(linspace(0,2*pi,1000))'];
-    plot(xBplot(:,1),xBplot(:,2),'k-',"LineWidth",2.5)
-    hold on
-    plot(xc(:,1),xc(:,2),'rx','LineWidth',2,'MarkerSize',10)
-    plot(xcB(:,1),xcB(:,2),'b.','LineWidth',2,'MarkerSize',15)
-    ax = gca;
-    ax.FontSize = 18;
-    xlabel("x","Interpreter","latex","FontSize",24)
-    ylabel("y","Interpreter","latex","FontSize",24,'Rotation',0)
-    legend('Domain, $$\Omega$$','Center points','Boundary points',"Interpreter","latex",'Location','south','Orientation','horizontal','FontSize',18)
-    xlim(ax, [-1.4 1.2]);
-    ylim(ax, [-1.4 1.2]);
-    axis equal
 elseif dim == 3
     figure()
     scatter3(xAll(:,1),xAll(:,2),xAll(:,3),[],uc,'filled'); axis equal
@@ -174,20 +138,14 @@ elseif dim == 3
     colorbar
     title("Error")
 end
-% l2Error(l) = norm(error,2)/norm(uc,2);
-% [~,dist] = knnsearch(xc,xc,'k',2);
-% hOut(l) = max(dist(:,2));
-end
+%
+% Operator and solution l2 errors
+%
+lapNumeric = Lglobal*uc;
+evalNumeric = Bglobal*uc;
+l2Error = norm(abs(error),2)/norm(uc,2);
+laplaceError = norm(lapAnalytic-lapNumeric,2)/norm(lapAnalytic,2);
+bndError = norm(evalNumeric-bndAnalytic,2)/(norm(bndAnalytic,2) + double(max(abs(bndAnalytic))==0));
 disp(['PDE error = ', num2str(l2Error)]);
-% loglog(1./hOut,l2Error,'bo-','LineWidth',1.5,'MarkerSize',12)
-% hold on
-% A = [ones(length(l2Error),1), log(1./hOut')]; F = log(l2Error)'; slope = A\F;
-% loglog(1./hOut,exp(slope(1)).*(1./hOut).^(slope(2)),'r--','LineWidth',2)
-% grid on;
-% ax = gca;
-% ax.FontSize = 18;
-% xlabel("1/h","FontSize","Interpreter","latex",28)
-% ylabel("error","FontSize","Interpreter","latex",28,'Rotation',90)
-% xlim([1, 100])
-% ylim([2e-7 1])
-% legend('Collocation RBF-FD','slope = -3.36',"Interpreter","latex",'Location','south','Orientation','horizontal','FontSize',18)
+disp(['Boundary Op error = ', num2str(bndError)]);
+disp(['Laplace Op error = ', num2str(laplaceError)]);

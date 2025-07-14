@@ -5,16 +5,20 @@ setPaths;
 % An unfitted least squares RBF-FD example for solving the Poisson equation in a dim 
 % dimensional ball using the available RBF routines.
 %
-dim = 2;                        % dim = 1,2 or 3
-scaling = 1;                    % Include scaling of the LS problem
-mvCentres = 0;                  % Option to have a Y point on top of all X points inside
-q = 2;                          % Oversampling
-h = 0.1;                        % approximate fill distance
-ep = 1;                         % Not relevant for 'r3' basis
-phi = 'r3';                     % Choice of basis
-pdeg = 2;                       % Polynomial extension
-n = 2*nchoosek(pdeg+dim,dim);   % Stencil size
-extCoeff = 0.25;                % Extension size (in % of stencil)
+dim = 2;                            % dim = 1,2 or 3
+scaling = 1;                        % Include scaling of the LS problem
+mvCentres = 0;                      % Option to have a Y point on top of all X points inside
+q = 2;                              % Oversampling
+h = 0.08;                            % approximate fill distance
+ep = 1;                             % Not relevant for 'r3' basis
+phi = 'r3';                         % Choice of basis 
+pdeg = 4;                           % Polynomial extension
+if pdeg == -1
+    n = 2*nchoosek(5+dim,dim);
+else
+    n = 2*nchoosek(pdeg+dim,dim);   % Stencil size
+end
+extCoeff = 0.25;                    % Extension size (in % of stencil)
 %
 % Place N centre points on line/circle/sphere, start with boundary if using fitted method
 %
@@ -36,12 +40,13 @@ xc = xc(pos,:) + C;
 %
 M = N*q;
 hy = ((dimACoeff(dim)*R^dim)/M).^(1/dim);
-Mb = ceil((dimPCoeff(dim)*R^(dim-1))/(dimACoeff(dim-1)*hy^(dim-1)));
 if dim == 1
     xeB = [-R, R]';
 elseif dim == 2
+    Mb = ceil((dimPCoeff(dim)*R^(dim-1))/(dimACoeff(dim-1)*hy^(dim-1)));
     xeB = [R*cos(linspace(-pi,pi,Mb)'), R*sin(linspace(-pi,pi,Mb)')];
 elseif dim == 3
+    Mb = ceil((dimPCoeff(dim)*R^(dim-1))/(dimACoeff(dim-1)*hy^(dim-1)));
     % Fibonacci points on sphere
     ratio = 1+sqrt(5);
     ind = [0:Mb-1]' + 0.5;
@@ -145,7 +150,7 @@ end
 %
 u = A\F;
 ue = Eglobal*u;
-error = abs(ue-uExact);
+error = ue-uExact;
 %
 % Plotting
 %
@@ -162,22 +167,54 @@ if dim == 1
     plot(xeAll,error,'.');
     title("Error")
 elseif dim == 2
-    figure()
-    scatter(xeAll(:,1),xeAll(:,2),[],uExact,'filled'); axis equal
-    colorbar
-    title("Exact solution")
 
+    T = delaunay(xeAll(:,1),xeAll(:,2));
     figure()
-    scatter(xeAll(:,1),xeAll(:,2),[],ue,'filled'); axis equal
-    colorbar
-    title("Numerical PDE solution")
-
-    figure()
-    scatter(xeAll(:,1),xeAll(:,2),[],error,'filled'); axis equal
-    colorbar
+    G=trisurf(T,xeAll(:,1),xeAll(:,2),uExact);
     hold on
-    plot(xc(:,1),xc(:,2),'rx')
-    title("Error")
+    plot(xeB(:,1),xeB(:,2),'k-',"LineWidth",1.5)
+    ax = gca;
+    ax.FontSize = 18;
+    xlabel("x","Interpreter","latex","FontSize",24)
+    ylabel("y","Interpreter","latex","FontSize",24)
+    zlabel("$$u_E$$","Interpreter","latex","FontSize",24,'Rotation',0)
+    set(G,'EdgeColor','none')
+    shading interp
+
+    figure()
+    G=trisurf(T,xeAll(:,1),xeAll(:,2),ue);
+    hold on
+    plot(xeB(:,1),xeB(:,2),'k-',"LineWidth",1.5)
+    set(G,'EdgeColor','none')
+    shading interp
+
+    figure()
+    G=trisurf(T,xeAll(:,1),xeAll(:,2),error);
+    hold on
+    plot(xeB(:,1),xeB(:,2),'k-',"LineWidth",1.5)
+    ax = gca;
+    ax.FontSize = 18;
+    xlabel("x","Interpreter","latex","FontSize",24)
+    ylabel("y","Interpreter","latex","FontSize",24)
+    zlabel("$$u-u_E$$","Interpreter","latex","FontSize",24)
+    set(G,'EdgeColor','none')
+    shading interp
+
+    figure()
+    xBplot = C + [R*cos(linspace(0,2*pi,1000))', R*sin(linspace(0,2*pi,1000))'];
+    plot(xBplot(:,1),xBplot(:,2),'k-',"LineWidth",2.5)
+    hold on
+    plot(xc(:,1),xc(:,2),'rx','LineWidth',2,'MarkerSize',10)
+    plot(xe(:,1),xe(:,2),'k.','LineWidth',2,'MarkerSize',15)
+    plot(xeB(:,1),xeB(:,2),'b.','LineWidth',2,'MarkerSize',15)
+    ax = gca;
+    ax.FontSize = 18;
+    xlabel("x","Interpreter","latex","FontSize",24)
+    ylabel("y","Interpreter","latex","FontSize",24,'Rotation',0)
+    legend('Domain, $$\Omega$$','Center points','Interior eval points','Boundary eval points',"Interpreter","latex",'Location','south','NumColumns',2,'Orientation','horizontal','FontSize',18)
+    xlim(ax, [-1.2 1.2]);
+    ylim(ax, [-1.8 1.2]);
+    axis equal
 elseif dim == 3
     figure()
     scatter3(xeAll(:,1),xeAll(:,2),xeAll(:,3),[],uExact,'filled'); axis equal
@@ -199,7 +236,7 @@ end
 %
 lapNumeric = Lglobal*ucExact;
 evalNumeric = Bglobal*ucExact;
-l2Error = norm(error,2)/norm(uExact,2);
+l2Error = norm(abs(error),2)/norm(uExact,2);
 laplaceError = norm(lapAnalytic-lapNumeric,2)/norm(lapAnalytic,2);
 bndError = norm(evalNumeric-bndAnalytic,2)/(norm(bndAnalytic,2) + double(max(abs(bndAnalytic))==0));
 disp(['PDE error = ', num2str(l2Error)]);
