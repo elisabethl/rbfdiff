@@ -63,6 +63,7 @@ else
     rr = Psi.rr;
     cc = Psi.cc;
     Te = (xe - cc)./rr;  % In case the call is made with Te as an output
+    % Te = xe;
     dim = size(Te,2);    
     compTrue = 0;
     if (ndiff > 0 & ndiff~=1.5) % Evaluation or Laplacian
@@ -79,7 +80,7 @@ else
             % Add polynomial terms
             %
             P = polyMat(Te,Psi.pdeg,derVec{k}(1,:));
-            for j=2:size(derVec,1)
+            for j=2:size(derVec{k},1)
                 P = P + polyMat(Te,Psi.pdeg,derVec{k}(j,:));
             end    
             np = size(P,2);
@@ -103,12 +104,12 @@ else
         B = Bout;
     elseif (ndiff==2)
         clear B
-        pos = 1;
-        for k=1:dim
-            for j=k+1:dim
-                B{k,j} = Bout{pos};
-                B{j,k} = B{k,j};
-                pos = pos + 1;
+        for k = 1:length(op)
+            if length(opDim{k}) == 1 
+                B{opDim{k},opDim{k}} = Bout{k};
+            else
+                B{opDim{k}(1),opDim{k}(2)} = Bout{k};
+                B{opDim{k}(2),opDim{k}(1)} = Bout{k};
             end
         end
     end    
@@ -128,7 +129,7 @@ elseif (ndiff==1)
     end
 elseif (ndiff==1.5)
     op{1} = 'L';
-    opDim{1} = 1;
+    opDim{1} = dim;
     derVec{1} = 2*I;
 elseif (ndiff==2)
     pos = 1;

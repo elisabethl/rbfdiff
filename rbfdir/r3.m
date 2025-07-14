@@ -3,6 +3,16 @@ function [phi]=r3(epsil,r,nprime,dim);
 if nargin<=3
   dim=1;
 end
+%
+% For the case of L or L2 operators, we need to know the number of dimensions
+%
+if (nprime(1)=='L')
+  if (size(r,3)==1)
+    nd=dim;
+  else
+    nd=size(r,3)-1;
+  end
+end
 
 phi=zeros(size(r,1),size(r,2));
 
@@ -22,8 +32,13 @@ elseif nprime(1)=='2'
 
 elseif nprime(1)=='L' & length(nprime)==1
 
-nd = size(r,3)-1;
 phi = 3*(nd+1)*sq(r(:,:,1));
+
+elseif nprime(1:2)=='m2'
+
+% Make sure that phi is computed correctly for r=0
+  mask=(r(:,:,1)==0);  
+  phi=3*sq(r(:,:,dim(1)+1).*r(:,:,dim(2)+1)./(r(:,:,1)+mask));
 
 else
   error('Error in input argument nprime to function r3')

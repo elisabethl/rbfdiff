@@ -81,7 +81,7 @@ if evalTrue
     elseif (ndiff == 1)
         [A{1},Te] = eval_diffmat(Psi,'x',xe);
         [A{2},Te] = eval_diffmat(Psi,'y',Te);
-        [A{2},Te] = eval_diffmat(Psi,'z',Te);
+        [A{3},Te] = eval_diffmat(Psi,'z',Te);
 
     elseif (ndiff == 1.5)
         [A,Te] = eval_diffmat(Psi,'L',xe);
