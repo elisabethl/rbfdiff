@@ -4,7 +4,8 @@ close all
 phi = {'rbfqr','gs','mq'};
 pdeg = [-1 -1 3];
 dim = 3;
-N = 56; % For 1D, 8 is a good number, 2D: 28, 3D:56
+Ndim = [8,28,56];
+N = Ndim(dim); % For 1D, 8 is a good number, 2D: 28, 3D:56
 Ne = N*4;
 epvec = logspace(-2,0,100);
 fnum = 1;
