@@ -5,7 +5,7 @@
 %          companion subroutine RBFDiffMat to compute evaluation and
 %          differentiation matrices for the RBF approximation. RBFInterpMat
 %          provides a unified interface for RBF-Direct and RBF-QR.
-% Psi = RBFInterpMat(phi,pdeg,ep,xc)
+% Psi = RBFInterpMat(phi,pdeg,ep,xc,xe)
 % Psi = RBFInterpMat(phi,pdeg,ep,xc,C,R)
 % Input:  phi    string with RBF name {'gs'|'mq'|'Bmq'|'iq'|'phs'|'rbfqr'} 
 %         pdeg	 integer scalar, the polynomial degree to add to the basis

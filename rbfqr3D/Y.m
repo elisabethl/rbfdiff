@@ -39,8 +39,8 @@ if nargout > 3
     Ythfi = zeros(length(th),mu+1,mu+1);
     Yfifi = zeros(length(th),mu+1,mu+1);
 end
-% Do case (0,0) separately (Matlab's legendre routine a bit strange
-% in this special case).
+% Do case (0,0) separately 
+
 c = 1/sqrt(2*pi);
 YY(:,1,1) = c*sqrt(0.5);
 z = cos(th);
@@ -52,7 +52,6 @@ z = cos(th);
 [t1,t2]=meshgrid(1:mu,fi); t = t1.* t2;
 cosfi = cos(t); sinfi = sin(t);
 for m=mmin+1:mu
-    %   p = legendre(m,z,'norm')'; % We need the normalization 'norm'.
     [p,pth,p_over_s,pthth,pfifi,pthfi] = normalizedLegendre(m,z);
     p = p.'; pth = pth.'; p_over_s = p_over_s.'; pthth = pthth.';
     pfifi = pfifi.'; pthfi=pthfi.';

@@ -2,20 +2,20 @@ clear
 close all
 
 domain = 'sphere'; % The options are sphere and cube
-N = 40; % The number of node points in the domain
-Ne = 1000; % The number of evaluation points
+N = 220; % The number of node points in the domain
+Ne = 400; % The number of evaluation points
 shift = 0; % To shift the center of the eval pts
-scale = 0.8; % To scale the size of the evaluation area
-epvec = logspace(-2,0,25); % To get error as a function of ep
+scale = 1; % To scale the size of the evaluation area
+epvec = logspace(-3,log10(2),25); % To get error as a function of ep
 epPlot = 0.1;
 rPlot = [0.5 0.8 1]; % Radii to plot for or z-values
 
-fnum = 1;
+fnum = 6;
 
 % Add some functions to choose from and compute their derivatives symbolically
 syms x y z
 if fnum==1
-    f = 0.5*(x^0+y^0+z^0);
+    f = 1/3*(x^0+y^0+z^0);
 elseif fnum==2
     f = x + y + z;
 elseif fnum==3
@@ -84,7 +84,7 @@ title('Node points')
 %
 % Apply to a function and compare with exact solution
 %
-uk = fun(xk(:,1),xk(:,2));
+uk = fun(xk(:,1),xk(:,2),xk(:,3));
 if length(uk)==1
     uk = uk*ones(size(xk(:,1)));
 end    
@@ -110,7 +110,7 @@ for j=1:length(epvec)
         erryy(j) = max(abs(H{2,2}*uk-funyy(xe(:,1),xe(:,2),xe(:,3))));
         erryz(j) = max(abs(H{2,3}*uk-funyz(xe(:,1),xe(:,2),xe(:,3))));
         errzz(j) = max(abs(H{3,3}*uk-funzz(xe(:,1),xe(:,2),xe(:,3))));
-        errL(j) = max(abs(L*uk-funxx(xe(:,1),xe(:,2))-funyy(xe(:,1),xe(:,2))));
+        errL(j) = max(abs(L*uk-funxx(xe(:,1),xe(:,2),xe(:,3))-funyy(xe(:,1),xe(:,2),xe(:,3))-funyy(xe(:,1),xe(:,2),xe(:,3))));
     end     
 end
 epvec = epvec(1:end-1);
