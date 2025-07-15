@@ -6,10 +6,7 @@ setPaths;
 % dimensional ball using the available RBF routines.
 %
 dim = 2;                        % dim = 1,2 or 3
-hVec = [0.5 0.2 0.1 0.08 0.05 0.03 0.02 0.01];                        % approximate fill distance
-for l = 1:length(hVec)
-    h = hVec(l);
-% h = 0.2;                        % approximate fill distance
+h = 0.1;                      % approximate fill distance
 ep = 1;                         % Not relevant for 'r3' basis
 phi = 'r3';
 pdeg = 4;
@@ -121,7 +118,11 @@ elseif dim == 2
     G=trisurf(T,xAll(:,1),xAll(:,2),uc);
     hold on
     plot(xcB(:,1),xcB(:,2),'k-',"LineWidth",1.5)
-    G=trisurf(T,xAll(:,1),xAll(:,2),uc);
+    ax = gca;
+    ax.FontSize = 18;
+    xlabel("x","Interpreter","latex","FontSize",24)
+    ylabel("y","Interpreter","latex","FontSize",24)
+    zlabel("$$u_E$$","Interpreter","latex","FontSize",24,'Rotation',0)
     set(G,'EdgeColor','none')
     shading interp
 
@@ -129,6 +130,11 @@ elseif dim == 2
     G=trisurf(T,xAll(:,1),xAll(:,2),u);
     hold on
     plot(xcB(:,1),xcB(:,2),'k-',"LineWidth",1.5)
+    ax = gca;
+    ax.FontSize = 18;
+    xlabel("x","Interpreter","latex","FontSize",24)
+    ylabel("y","Interpreter","latex","FontSize",24)
+    zlabel("$$u$$","Interpreter","latex","FontSize",24,'Rotation',0)
     set(G,'EdgeColor','none')
     shading interp
 
@@ -174,20 +180,5 @@ elseif dim == 3
     colorbar
     title("Error")
 end
-% l2Error(l) = norm(error,2)/norm(uc,2);
-% [~,dist] = knnsearch(xc,xc,'k',2);
-% hOut(l) = max(dist(:,2));
-end
+l2Error = norm(error,2)/norm(uc,2);
 disp(['PDE error = ', num2str(l2Error)]);
-% loglog(1./hOut,l2Error,'bo-','LineWidth',1.5,'MarkerSize',12)
-% hold on
-% A = [ones(length(l2Error),1), log(1./hOut')]; F = log(l2Error)'; slope = A\F;
-% loglog(1./hOut,exp(slope(1)).*(1./hOut).^(slope(2)),'r--','LineWidth',2)
-% grid on;
-% ax = gca;
-% ax.FontSize = 18;
-% xlabel("1/h","FontSize","Interpreter","latex",28)
-% ylabel("error","FontSize","Interpreter","latex",28,'Rotation',90)
-% xlim([1, 100])
-% ylim([2e-7 1])
-% legend('Collocation RBF-FD','slope = -3.36',"Interpreter","latex",'Location','south','Orientation','horizontal','FontSize',18)

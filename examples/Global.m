@@ -2,11 +2,11 @@ close all
 clear all
 setPaths;
 %
-% A collocation RBF-FD example for solving the Poisson equation in a dim 
+% A global RBF example for solving the Poisson equation in a dim 
 % dimensional ball using the available RBF routines.
 %
 dim = 2;                        % dim = 1,2 or 3
-h = 0.1;                        % approximate fill distance
+h = 0.01;                        % approximate fill distance
 ep = 0.1;                         % Not relevant for 'r3' basis
 phi = 'rbfqr';
 pdeg = -1;

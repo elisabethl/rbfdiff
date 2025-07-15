@@ -9,7 +9,7 @@ dim = 2;                            % dim = 1,2 or 3
 scaling = 1;                        % Include scaling of the LS problem
 mvCentres = 0;                      % Option to have a Y point on top of all X points inside
 q = 2;                              % Oversampling
-h = 0.08;                            % approximate fill distance
+h = 0.1;                            % approximate fill distance
 ep = 1;                             % Not relevant for 'r3' basis
 phi = 'r3';                         % Choice of basis 
 pdeg = 4;                           % Polynomial extension
@@ -18,7 +18,7 @@ if pdeg == -1
 else
     n = 2*nchoosek(pdeg+dim,dim);   % Stencil size
 end
-extCoeff = 0.25;                    % Extension size (in % of stencil)
+extCoeff = 0.5;                     % Extension size (in % of stencil)
 %
 % Place N centre points on line/circle/sphere, start with boundary if using fitted method
 %
@@ -38,7 +38,7 @@ xc = xc(pos,:) + C;
 %
 % Place M evaluation points. Start with boundary points
 %
-M = N*q;
+M = ceil(N*q);
 hy = ((dimACoeff(dim)*R^dim)/M).^(1/dim);
 if dim == 1
     xeB = [-R, R]';
@@ -86,10 +86,10 @@ ptStencilList = knnsearch(xc,xeAll,'K',1);
 %
 % Constructing global LS-RBF-FD approximation to evaluation, Laplace and boundary operators Min x N
 %
-Eglobal = zeros(M,N);
-Lglobal = zeros(Min,N);
-LtestGlob = zeros(M,N);
-Bglobal = zeros(Mb,N);
+Eglobal = spalloc(M,N,M*n);
+Lglobal = spalloc(Min,N,Min*n);
+LtestGlob = spalloc(M,N,M*n);
+Bglobal = spalloc(Mb,N,Mb*n);
 for i = 1:N
     [id,~] = knnsearch(xc,xc(i,:),'K',n);
     xcLoc = xc(id,:); % stencil
@@ -185,6 +185,11 @@ elseif dim == 2
     G=trisurf(T,xeAll(:,1),xeAll(:,2),ue);
     hold on
     plot(xeB(:,1),xeB(:,2),'k-',"LineWidth",1.5)
+    ax = gca;
+    ax.FontSize = 18;
+    xlabel("x","Interpreter","latex","FontSize",24)
+    ylabel("y","Interpreter","latex","FontSize",24)
+    zlabel("$$u$$","Interpreter","latex","FontSize",24,'Rotation',0)
     set(G,'EdgeColor','none')
     shading interp
 
@@ -242,3 +247,4 @@ bndError = norm(evalNumeric-bndAnalytic,2)/(norm(bndAnalytic,2) + double(max(abs
 disp(['PDE error = ', num2str(l2Error)]);
 disp(['Boundary Op error = ', num2str(bndError)]);
 disp(['Laplace Op error = ', num2str(laplaceError)]);
+
