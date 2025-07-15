@@ -6,45 +6,43 @@ setPaths;
 % dimensional ball using the available RBF routines.
 %
 dim = 2;                        % dim = 1,2 or 3
-h = 0.01;                        % approximate fill distance
-ep = 0.1;                         % Not relevant for 'r3' basis
-phi = 'rbfqr';
+ep = 1;                         % Not relevant for 'r3' basis
+phi = 'mq';
 pdeg = -1;
+order = 30;
 %
 % We place halton points in a line/circle/sphere centred at C with radius R
 %
+N = nchoosek(order+dim-1,dim);
 C = zeros(1,dim);
 R = 1;
-dimRat = [1 1.2*4/pi 1.2*8/(4*pi/3)];
-Nin = floor(1/(0.5*h))^dim;
-Ncube = ceil(dimRat(dim)*Nin);
-xc = 2*R*(halton(Ncube,dim)-0.5);
-r2 = sqrt(sum(xc.^2,2));
-pos = find(r2<=R);
-pos = pos(1:Nin);
-xc = xc(pos,:) + C; 
-[~,dist] = knnsearch(xc,xc,'K',2);
-%
-% Place boundary points using fill distance measure from interior
-%
+dimRat = [1 1.2*4/pi 1.2*8/(4*pi/3)];   % Ratios between rectangle/circle, cube/sphere area and volume
+dimACoeff = [1 pi (4/3)*pi];            % constant for size of domain
+dimPCoeff = [1 2*pi 4*pi];              % constant for computing size of boundary
+h = ((dimACoeff(dim)*R^dim)/N).^(1/dim);
 if dim == 1
     xcB = [-R, R]';
 elseif dim == 2
-    Nb = ceil(2*pi*R/max(dist(:,2)));
-    xcB = [R*cos(linspace(0,2*pi,Nb)'), R*sin(linspace(0,2*pi,Nb)')];
+    Nb = ceil((dimPCoeff(dim)*R^(dim-1))/(dimACoeff(dim-1)*h^(dim-1)));
+    xcB = [R*cos(linspace(-pi,pi,Nb)'), R*sin(linspace(-pi,pi,Nb)')];
 elseif dim == 3
+    Nb = ceil((dimPCoeff(dim)*R^(dim-1))/(dimACoeff(dim-1)*h^(dim-1)));
     % Fibonacci points on sphere
-    Nb = ceil(4*pi*R/max(dist(:,2)));
     ratio = 1+sqrt(5);
     ind = [0:Nb-1]' + 0.5;
     theta = pi*ratio*ind;
     fi = acos(1-(2*ind)/(Nb));
     xcB = [R.*sin(fi).*cos(theta), R.*sin(fi).*sin(theta), R.*cos(fi)];
 end
-
-xAll = [xc; xcB]; % Interior and boundary points (all centres for collocation)
-N = length(xAll);
 Nb = length(xcB);
+Ncube = ceil(dimRat(dim)*(N-Nb));
+xc = 2*R*(halton(Ncube,dim)-0.5);
+r2 = sqrt(sum(xc.^2,2));
+pos = find(r2<=R);
+pos = pos(1:(N-Nb));
+xc = xc(pos,:) + C; 
+Nin = length(xc);
+xAll = [xc; xcB];
 %
 % Constructing global Kansa approximation to Laplace and boundary operators
 %

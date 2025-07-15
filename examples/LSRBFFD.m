@@ -5,20 +5,22 @@ setPaths;
 % An unfitted least squares RBF-FD example for solving the Poisson equation in a dim 
 % dimensional ball using the available RBF routines.
 %
-dim = 2;                            % dim = 1,2 or 3
+dim = 1;                            % dim = 1,2 or 3
+display = 1;                        % Plot solution
+domain = 'ball';                    % ball or cube
 scaling = 1;                        % Include scaling of the LS problem
-mvCentres = 0;                      % Option to have a Y point on top of all X points inside
+mvCentres = 1;                      % Option to have a Y point on top of all X points inside
 q = 2;                              % Oversampling
-h = 0.1;                            % approximate fill distance
+h = 0.01;                            % approximate fill distance
 ep = 1;                             % Not relevant for 'r3' basis
 phi = 'r3';                         % Choice of basis 
-pdeg = 4;                           % Polynomial extension
+pdeg = 2;                           % Polynomial extension
 if pdeg == -1
     n = 2*nchoosek(5+dim,dim);
 else
     n = 2*nchoosek(pdeg+dim,dim);   % Stencil size
 end
-extCoeff = 0.5;                     % Extension size (in % of stencil)
+extCoeff = 0;                     % Extension size (in % of stencil)
 %
 % Place N centre points on line/circle/sphere, start with boundary if using fitted method
 %
@@ -80,7 +82,9 @@ xeAll = [xe; xeB]; % Interior and boundary points (all centres for collocation)
 %
 % Ensure center points are not too far from boundary and make evaluation point - stencil list 
 %
-xc = xc(unique(knnsearch(xc,xeAll,'K',ceil(extCoeff*n))),:);
+if extCoeff ~= 0
+    xc = xc(unique(knnsearch(xc,xeAll,'K',ceil(extCoeff*n))),:);
+end
 N = length(xc);
 ptStencilList = knnsearch(xc,xeAll,'K',1);
 %
@@ -150,101 +154,112 @@ end
 %
 u = A\F;
 ue = Eglobal*u;
-error = ue-uExact;
-%
-% Plotting
-%
-if dim == 1
-    figure()
-    plot(xeAll,uExact,'.'); 
-    title("Exact solution")
 
-    figure()
-    plot(xeAll,ue,'.');
-    title("Numerical PDE solution")
-
-    figure()
-    plot(xeAll,error,'.');
-    title("Error")
-elseif dim == 2
-
-    T = delaunay(xeAll(:,1),xeAll(:,2));
-    figure()
-    G=trisurf(T,xeAll(:,1),xeAll(:,2),uExact);
-    hold on
-    plot(xeB(:,1),xeB(:,2),'k-',"LineWidth",1.5)
-    ax = gca;
-    ax.FontSize = 18;
-    xlabel("x","Interpreter","latex","FontSize",24)
-    ylabel("y","Interpreter","latex","FontSize",24)
-    zlabel("$$u_E$$","Interpreter","latex","FontSize",24,'Rotation',0)
-    set(G,'EdgeColor','none')
-    shading interp
-
-    figure()
-    G=trisurf(T,xeAll(:,1),xeAll(:,2),ue);
-    hold on
-    plot(xeB(:,1),xeB(:,2),'k-',"LineWidth",1.5)
-    ax = gca;
-    ax.FontSize = 18;
-    xlabel("x","Interpreter","latex","FontSize",24)
-    ylabel("y","Interpreter","latex","FontSize",24)
-    zlabel("$$u$$","Interpreter","latex","FontSize",24,'Rotation',0)
-    set(G,'EdgeColor','none')
-    shading interp
-
-    figure()
-    G=trisurf(T,xeAll(:,1),xeAll(:,2),error);
-    hold on
-    plot(xeB(:,1),xeB(:,2),'k-',"LineWidth",1.5)
-    ax = gca;
-    ax.FontSize = 18;
-    xlabel("x","Interpreter","latex","FontSize",24)
-    ylabel("y","Interpreter","latex","FontSize",24)
-    zlabel("$$u-u_E$$","Interpreter","latex","FontSize",24)
-    set(G,'EdgeColor','none')
-    shading interp
-
-    figure()
-    xBplot = C + [R*cos(linspace(0,2*pi,1000))', R*sin(linspace(0,2*pi,1000))'];
-    plot(xBplot(:,1),xBplot(:,2),'k-',"LineWidth",2.5)
-    hold on
-    plot(xc(:,1),xc(:,2),'rx','LineWidth',2,'MarkerSize',10)
-    plot(xe(:,1),xe(:,2),'k.','LineWidth',2,'MarkerSize',15)
-    plot(xeB(:,1),xeB(:,2),'b.','LineWidth',2,'MarkerSize',15)
-    ax = gca;
-    ax.FontSize = 18;
-    xlabel("x","Interpreter","latex","FontSize",24)
-    ylabel("y","Interpreter","latex","FontSize",24,'Rotation',0)
-    legend('Domain, $$\Omega$$','Center points','Interior eval points','Boundary eval points',"Interpreter","latex",'Location','south','NumColumns',2,'Orientation','horizontal','FontSize',18)
-    xlim(ax, [-1.2 1.2]);
-    ylim(ax, [-1.8 1.2]);
-    axis equal
-elseif dim == 3
-    figure()
-    scatter3(xeAll(:,1),xeAll(:,2),xeAll(:,3),[],uExact,'filled'); axis equal
-    colorbar
-    title("Exact solution")
-
-    figure()
-    scatter3(xeAll(:,1),xeAll(:,2),xeAll(:,3),[],ue,'filled'); axis equal
-    colorbar
-    title("Numerical solution")
-
-    figure()
-    scatter3(xeAll(:,1),xeAll(:,2),xeAll(:,3),[],error,'filled'); axis equal
-    colorbar
-    title("Error")
+if display
+    plotSolution(ue,uExact,xeAll,xeB,dim);
 end
+
 %
 % Operator and solution l2 errors
 %
 lapNumeric = Lglobal*ucExact;
 evalNumeric = Bglobal*ucExact;
-l2Error = norm(abs(error),2)/norm(uExact,2);
+l2Error = norm(abs(ue-uExact),2)/norm(uExact,2);
 laplaceError = norm(lapAnalytic-lapNumeric,2)/norm(lapAnalytic,2);
 bndError = norm(evalNumeric-bndAnalytic,2)/(norm(bndAnalytic,2) + double(max(abs(bndAnalytic))==0));
 disp(['PDE error = ', num2str(l2Error)]);
 disp(['Boundary Op error = ', num2str(bndError)]);
 disp(['Laplace Op error = ', num2str(laplaceError)]);
 
+%
+% Plotting routines
+%
+function [] = plotSolution(uNumeric,uAnalytic,x,xB,dim)
+    error = uNumeric-uAnalytic;
+    if dim == 1
+        figure()
+        plot(x,uAnalytic,'b-'); 
+        ax = gca;
+        ax.FontSize = 18;
+        xlabel("x","Interpreter","latex","FontSize",24)
+        ylabel("$$u_E$$","Interpreter","latex","FontSize",24,'Rotation',0)
+    
+        figure()
+        plot(x,uNumeric,'.');
+        title("Numerical PDE solution")
+    
+        figure()
+        plot(x,error,'.');
+        title("Error")
+    elseif dim == 2
+        T = delaunay(x(:,1),x(:,2));
+
+        figure()
+        G=trisurf(T,x(:,1),x(:,2),uAnalytic);
+        hold on
+        plot(xB(:,1),xB(:,2),'k-',"LineWidth",1.5)
+        ax = gca;
+        ax.FontSize = 18;
+        xlabel("x","Interpreter","latex","FontSize",24)
+        ylabel("y","Interpreter","latex","FontSize",24)
+        zlabel("$$u_E$$","Interpreter","latex","FontSize",24,'Rotation',0)
+        set(G,'EdgeColor','none')
+        shading interp
+    
+        figure()
+        G=trisurf(T,x(:,1),x(:,2),uNumeric);
+        hold on
+        plot(xB(:,1),xB(:,2),'k-',"LineWidth",1.5)
+        ax = gca;
+        ax.FontSize = 18;
+        xlabel("x","Interpreter","latex","FontSize",24)
+        ylabel("y","Interpreter","latex","FontSize",24)
+        zlabel("$$u$$","Interpreter","latex","FontSize",24,'Rotation',0)
+        set(G,'EdgeColor','none')
+        shading interp
+    
+        figure()
+        G=trisurf(T,x(:,1),x(:,2),error);
+        hold on
+        plot(xB(:,1),xB(:,2),'k-',"LineWidth",1.5)
+        ax = gca;
+        ax.FontSize = 18;
+        xlabel("x","Interpreter","latex","FontSize",24)
+        ylabel("y","Interpreter","latex","FontSize",24)
+        zlabel("$$u-u_E$$","Interpreter","latex","FontSize",24)
+        set(G,'EdgeColor','none')
+        shading interp
+    
+    elseif dim == 3
+        figure()
+        scatter3(x(:,1),x(:,2),x(:,3),[],uAnalytic,'filled'); axis equal
+        colorbar
+        title("Exact solution")
+    
+        figure()
+        scatter3(x(:,1),x(:,2),x(:,3),[],uNumeric,'filled'); axis equal
+        colorbar
+        title("Numerical solution")
+    
+        figure()
+        scatter3(x(:,1),x(:,2),x(:,3),[],error,'filled'); axis equal
+        colorbar
+        title("Error")
+    end
+end
+
+% figure()
+% xBplot = C + [R*cos(linspace(0,2*pi,1000))', R*sin(linspace(0,2*pi,1000))'];
+% plot(xBplot(:,1),xBplot(:,2),'k-',"LineWidth",2.5)
+% hold on
+% plot(xc(:,1),xc(:,2),'rx','LineWidth',2,'MarkerSize',10)
+% plot(xe(:,1),xe(:,2),'k.','LineWidth',2,'MarkerSize',15)
+% plot(xeB(:,1),xeB(:,2),'b.','LineWidth',2,'MarkerSize',15)
+% ax = gca;
+% ax.FontSize = 18;
+% xlabel("x","Interpreter","latex","FontSize",24)
+% ylabel("y","Interpreter","latex","FontSize",24,'Rotation',0)
+% legend('Domain, $$\Omega$$','Center points','Interior eval points','Boundary eval points',"Interpreter","latex",'Location','south','NumColumns',2,'Orientation','horizontal','FontSize',18)
+% xlim(ax, [-1.2 1.2]);
+% ylim(ax, [-1.8 1.2]);
+% axis equal
