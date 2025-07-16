@@ -2,19 +2,19 @@ close all
 clear all
 setPaths;
 %
-% An unfitted least squares RBF-FD example for solving the Poisson equation in a dim 
-% dimensional ball using the available RBF routines.
+% An RBF-FD example for solving the Poisson equation. Collocation and
+% unfitted, fitted methods.
 %
 dim = 2;                            % dim = 1,2 or 3
 display = 1;                        % Plot solution
-geom = 'ball';                      % ball or cube
-mode = 'unfitted';                    % fitted, unfitted or collocation
-scaling = 1;                        % Include scaling of the LS problem
+geom = 'cube';                      % ball or cube
+mode = 'unfitted';                  % fitted, unfitted or collocation
+scaling = 1;                        % Include scaling of the unfitted LS problem
 mvCentres = 0;                      % Option to have a Y point on top of all X points inside the domain
 q = 2;                              % Oversampling
-N = 200;                            % Number of center points
+N = 500;                            % Number of center points
 ep = 1;                             % Not relevant for 'r3' basis
-phi = 'r3';                         % Choice of basis 
+phi = 'r3';                         % Choice of basis 'r3', 'mq', 'gs', 'iq', 'rbfqr'
 pdeg = 2;                           % Polynomial extension, not relevant for 'rbfqr'
 rbfDeg = 4;                         % Relevant when there is no polynomial extension
 extCoeff = 0.5;                     % Extension size (in % of stencil), relevant for unfitted method
@@ -25,23 +25,26 @@ else
 end
 extCoeff = extCoeff*(strcmp(mode,"unfitted"));
 %
-% Place N centre points and M evaluation points in geom with centre C and
-% radius R
+% Place N centre points and M evaluation points in geom with centre C and radius R
 %
 C = zeros(1,dim);
-R = 1;
+R = sqrt(2);%1;
 [xc,xcB,V,Area] = getPts(geom,N,n,C,R,mode,extCoeff);
-xcAll = [xc; xcB];                              % Interior and boundary points 
-idXin = 1:size(xc,1);                           % Interior pts index
-idXbnd = size(xc,1)+1:size(xcAll,1);              % Boundary pts index
+xcAll = [xc; xcB];                                      % Interior and boundary points 
+idXin = 1:size(xc,1);                                   % Interior pts index
+idXbnd = size(xc,1)+1:size(xcAll,1);                    % Boundary pts index
 % 
 % For collocation, evaluation and centre points match
 %
 if strcmp(mode,"collocation")
+    M = N;
     xe = xc; xeB = xcB;
 else
     M = q*N;
     [xe,xeB] = getPts(geom,M,n,C,R,"fitted",0);
+    %
+    % Move evaluation points inside to the closest center point
+    %
     if mvCentres
         xcIn = xc(sqrt(sum(xc.^2,2))<=R,:);
         xeTemp = xe;
@@ -54,9 +57,9 @@ else
         xe(idMove,:) = xcIn;
     end
 end
-xeAll = [xe; xeB];                  % Interior and boundary points 
-idYin = 1:size(xe,1);               % Interior pts index
-idYbnd = size(xe,1)+1:size(xeAll,1);  % Boundary pts index
+xeAll = [xe; xeB];                      % Interior and boundary points 
+idYin = 1:size(xe,1);                   % Interior pts index
+idYbnd = size(xe,1)+1:size(xeAll,1);    % Boundary pts index
 %
 % Ensure center points are not too far from boundary and make evaluation point - stencil list 
 %
@@ -65,7 +68,7 @@ if strcmp(mode,"unfitted")
 end
 N = length(xcAll);
 ptStencilList = knnsearch(xcAll,xeAll,'K',1);
-relXc = unique(ptStencilList);
+relXc = unique(ptStencilList); % stencil centres that are used directly
 %
 % Constructing global LS-RBF-FD approximation to evaluation and Laplace operators M x N
 %
@@ -112,15 +115,15 @@ elseif dim == 3
     lapAnalytic = lapFun(xe(:,1),xe(:,2),xe(:,3));
     bndAnalytic = fun(xeB(:,1),xeB(:,2),xeB(:,3));
 end 
-
 %
 % LS problem scaling
 %
-if scaling
+if scaling && strcmp(mode,"unfitted")
     [~,dist] = knnsearch(xcAll,xcAll,'K',2);
     h = max(dist(:,2));
     Lscale = sqrt(V/length(idYin));
     Bscale = sqrt(Area/length(idYbnd))*(h.^-1.5);
+    L = Lscale.*L; B = Bscale.*B;
     F(idYin) = Lscale.*F(idYin);
     F(idYbnd) = Bscale.*F(idYbnd);
 end
@@ -131,20 +134,16 @@ if strcmp(mode,"fitted")
     L = Lglobal(:,idXin);
     B = zeros(0,N);
 end
-
 %
 % Solution on centre points, evaluated on Y set
 %
 A = [L; B];
 u = A\F;
-
 %
 % Fix operators to compute error measures
 %
 if strcmp(mode,"fitted")
     u = [u; ucExact(idXbnd)];
-    L = Lglobal(idYin,:);
-    B = Eglobal(idYbnd,:);
 end
 ue = Eglobal*u;
 %
@@ -156,8 +155,8 @@ if display
     %
     % Operator and solution l2 errors
     %
-    lapNumeric = L*ucExact;
-    evalNumeric = B*ucExact;
+    lapNumeric = Lglobal(idYin,:)*ucExact;
+    evalNumeric = Eglobal(idYbnd,:)*ucExact;
     l2Error = norm(abs(ue-uExact),2)/norm(uExact,2);
     laplaceError = norm(lapAnalytic-lapNumeric,2)/norm(lapAnalytic,2);
     bndError = norm(evalNumeric-bndAnalytic,2)/(norm(bndAnalytic,2) + double(max(abs(bndAnalytic))==0));
@@ -165,7 +164,6 @@ if display
     disp(['Boundary Op error = ', num2str(bndError)]);
     disp(['Laplace Op error = ', num2str(laplaceError)]);
 end
-
 %
 % Plotting routines
 %
@@ -276,6 +274,9 @@ function [] = plotSolution(uNumeric,uAnalytic,x,xB,dim)
         shading interp
     end
 end
+%
+% Point generation routine
+%
 function [x,xB,Vol,Area] = getPts(geom,N,n,C,R,mode,extCoeff)
     dim = size(C,2);
     if strcmp(geom,'ball')
@@ -285,9 +286,10 @@ function [x,xB,Vol,Area] = getPts(geom,N,n,C,R,mode,extCoeff)
         h = R/(0.5*N^(1/dim) - extCoeff*n^(1/dim)); % approximate fill distance
         xB = zeros(0,dim);
         %
-        % If using theunfitted method, no points on the boundary
+        % If using the unfitted method, no points on the boundary
         %
         if ~strcmp(mode,'unfitted')
+            % Boundary point generation
             if dim == 1
                 xB = [-R, R]';
             elseif dim == 2
@@ -304,13 +306,102 @@ function [x,xB,Vol,Area] = getPts(geom,N,n,C,R,mode,extCoeff)
             end
         end
         Nb = length(xB);
+        % Interior point generation
         Ncube = ceil(dimRat(dim)*(N-Nb));
         x = 2*(R+n^(1/dim)*h*extCoeff)*(halton(Ncube,dim)-0.5);
         r2 = sqrt(sum(x.^2,2));
         pos = find(r2<=(R+n^(1/dim)*h*extCoeff));
         pos = pos(1:N-Nb);
         x = x(pos,:) + C;
-
+        %
+        % Domain volume and area measures used for the scaling of the LS
+        % problem
+        %
+        Vol = (dimACoeff(dim)*R^dim);
+        Area = (dimPCoeff(dim)*R^(dim-1));
+    end
+    
+    if strcmp(geom,'ball')
+        dimRat = [1 1.2*4/pi 1.2*8/(4*pi/3)];       % Ratios between rectangle/circle, cube/sphere area and volume
+        dimACoeff = [1 pi (4/3)*pi];                % constant for size of domain
+        dimPCoeff = [1 2*pi 4*pi];                  % constant for computing size of boundary
+        h = R/(0.5*N^(1/dim) - extCoeff*n^(1/dim)); % approximate fill distance
+        xB = zeros(0,dim);
+        %
+        % If using the unfitted method, no points on the boundary
+        %
+        if ~strcmp(mode,'unfitted')
+            % Boundary point generation
+            if dim == 1
+                xB = [-R, R]';
+            elseif dim == 2
+                Nb = ceil((dimPCoeff(dim)*R^(dim-1))/(dimACoeff(dim-1)*h^(dim-1)));
+                xB = [R*cos(linspace(-pi,pi-(2*pi)/(Nb+1),Nb)'), R*sin(linspace(-pi,pi-(2*pi)/(Nb+1),Nb)')];
+            elseif dim == 3
+                Nb = ceil((dimPCoeff(dim)*R^(dim-1))/(dimACoeff(dim-1)*(0.5*h)^(dim-1)));
+                % Fibonacci points on sphere
+                ratio = 1+sqrt(5);
+                ind = [0:Nb-1]' + 0.5;
+                theta = pi*ratio*ind;
+                fi = acos(1-(2*ind)/(Nb));
+                xB = [R.*sin(fi).*cos(theta), R.*sin(fi).*sin(theta), R.*cos(fi)];
+            end
+        end
+        Nb = length(xB);
+        % Interior point generation
+        Ncube = ceil(dimRat(dim)*(N-Nb));
+        x = 2*(R+n^(1/dim)*h*extCoeff)*(halton(Ncube,dim)-0.5);
+        r2 = sqrt(sum(x.^2,2));
+        pos = find(r2<=(R+n^(1/dim)*h*extCoeff));
+        pos = pos(1:N-Nb);
+        x = x(pos,:) + C;
+        %
+        % Domain volume and area measures used for the scaling of the LS
+        % problem
+        %
+        Vol = (dimACoeff(dim)*R^dim);
+        Area = (dimPCoeff(dim)*R^(dim-1));
+    elseif strcmp(geom,'cube')
+        dimACoeff = [1 2 8*sqrt(3)/9];                % constant for size of domain
+        dimPCoeff = [1 4*sqrt(2) 8];                  % constant for computing size of boundary
+        dimLCoeff = [1 sqrt(2)/2 sqrt(3)/3];          % constant for computing size of boundary
+        h = R/(0.5*N^(1/dim) - extCoeff*n^(1/dim));   % approximate fill distance
+        xB = zeros(0,dim);
+        %
+        % If using the unfitted method, no points on the boundary
+        %
+        if ~strcmp(mode,'unfitted')
+            % Boundary point generation
+            if dim == 1
+                xB = [-R, R]';
+            elseif dim == 2
+                Nb = ceil((dimPCoeff(dim)*R^(dim-1))/(dimACoeff(dim-1)*h^(dim-1)));
+                xLim = C(1) + [-dimLCoeff(dim)*R dimLCoeff(dim)*R];
+                yLim = C(2) + [-dimLCoeff(dim)*R dimLCoeff(dim)*R];
+                xB = [linspace(xLim(1),xLim(2),floor(Nb/4))', ones(floor(Nb/4),1)*yLim(1);...
+                      ones(floor(Nb/4),1)*xLim(1), linspace(yLim(1),yLim(2),floor(Nb/4))';...
+                      linspace(xLim(1),xLim(2),floor(Nb/4))', ones(floor(Nb/4),1)*yLim(2);...
+                      ones(floor(Nb/4),1)*xLim(2), linspace(yLim(1),yLim(2),floor(Nb/4))'];
+                xB = unique(xB,'rows');
+            elseif dim == 3
+                Nb = ceil((dimPCoeff(dim)*R^(dim-1))/(dimACoeff(dim-1)*h^(dim-1)));
+                xLim = C(1) + [-sqrt(3)*R sqrt(3)*R];
+                yLim = C(2) + [-sqrt(3)*R sqrt(3)*R];
+                zLim = C(3) + [-sqrt(3)*R sqrt(3)*R];
+                % xB = [linspace(xLim(1),xLim(2),floor(Nb/12))', linspace(yLim(1),yLim(2),floor(Nb/12))', zlim(1);...
+                %       linspace(xLim(1),xLim(2),floor(Nb/12))', linspace(yLim(1),yLim(2),floor(Nb/12))', zlim(1);...
+                %       ];
+            end
+        end
+        Nb = length(xB);
+        % Interior point generation
+        x = 2*(dimLCoeff(dim)*R+dimLCoeff(dim)*n^(1/dim)*h*extCoeff)*(halton(N-Nb,dim)-0.5);
+        r2 = sqrt(sum(x.^2,2));
+        x = x + C;
+        %
+        % Domain volume and area measures used for the scaling of the LS
+        % problem
+        %
         Vol = (dimACoeff(dim)*R^dim);
         Area = (dimPCoeff(dim)*R^(dim-1));
     end
