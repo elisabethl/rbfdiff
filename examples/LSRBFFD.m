@@ -2,17 +2,17 @@ close all
 clear all
 setPaths;
 %
-% An RBF-FD example for solving the Poisson equation. Collocation and
-% unfitted, fitted methods.
+% An RBF-FD example for solving the Poisson equation. Collocation and LS
+% unfitted or fitted methods.
 %
-dim = 2;                            % dim = 1,2 or 3
+dim = 3;                            % dim = 1,2 or 3
 display = 1;                        % Plot solution
 geom = 'cube';                      % ball or cube
-mode = 'unfitted';                  % fitted, unfitted or collocation
+mode = 'fitted';                  % fitted, unfitted or collocation
 scaling = 1;                        % Include scaling of the unfitted LS problem
 mvCentres = 1;                      % Option to have a Y point on top of all X points inside the domain
 q = 2;                              % Oversampling
-N = 500;                            % Number of center points
+N = 1000;                            % Number of center points (X)
 ep = 1;                             % Not relevant for 'r3' basis
 phi = 'r3';                         % Choice of basis 'r3', 'mq', 'gs', 'iq', 'rbfqr'
 pdeg = 2;                           % Polynomial extension, not relevant for 'rbfqr'
@@ -33,60 +33,50 @@ if strcmp(geom,'cube')
     R = R*(dim)^(1/2);
 end
 [dataX] = getPts(geom,N,n,C,R,mode,extCoeff);
-xcAll = dataX.nodes;                                     
+xc = dataX.nodes;                                     
 % 
 % For collocation, evaluation and centre points match
 %
 if strcmp(mode,"collocation")
-    M = N;
+    M = N;                                      % Number of evaluation points (Y)
     dataY = dataX;
-    xeAll = dataY.nodes;
+    xe = dataY.nodes;
 else
-    M = q*N;
+    M = q*N;                                    % Number of evaluation points (Y)
     [dataY] = getPts(geom,M,n,C,R,"fitted",0);
-    xeAll = dataY.nodes;
     %
-    % Move evaluation points inside to the closest center point
+    % Move evaluation points inside (and on the boundary) to the closest center point.
+    % Make sure not to move two evaluation points to the same center point. All
+    % center points should be moved to.
     %
     if mvCentres
         iXdone = [];
-        xcIn = xcAll([dataX.inner; dataX.bnd],:);
-        xeIn = xeAll([dataY.inner; dataY.bnd],:);
+        xcIn = xc([dataX.inner; dataX.bnd],:);
+        xeIn = dataY.nodes([dataY.inner; dataY.bnd],:);
         idMvAll = knnsearch(xeIn,xcIn,'k',n*q);
         i = 1;
-        idMv = idMvAll(:,i);
-        while length(iXdone) ~= size(xcIn,1)
-            [~,~,iX] = unique(idMv);
-            xeIn(idMv(unique(iX)),:) = xcIn(unique(iX),:);
-            iXdone = [iXdone; unique(iX)];
+        idYmv = idMvAll(:,i);
+        idXmv = [1:size(xcIn)]';
+        while length(iXdone) ~= size(xcIn,1) % ensure all center points inside have an evaulation point
+            [unIdYmv,iX,~] = unique(idYmv);
+            xeIn(unIdYmv,:) = xcIn(idXmv(iX),:);
+            iXdone = [iXdone; idXmv(iX)];
             i = i + 1;
-            idMv = idMvAll(setdiff([1:size(xcIn)]',iXdone),i);
+            idXmv = setdiff(idXmv,iXdone);
+            idYmv = idMvAll(idXmv,i);
         end
         dataY.nodes([dataY.inner; dataY.bnd],:) = xeIn;
     end
-    % if mvCentres
-    %     xcIn = xc(sqrt(sum(xc.^2,2))<=R,:);
-    %     xeTemp = xe;
-    %     for i = 1:length(xcIn)
-    %         idMove = knnsearch(xeTemp,xcIn(i,:),'K',1);
-    %         xe(idMove,:) = xcIn(i,:);
-    %         xeTemp(idMove,:) = 2*R.*ones(1,dim);
-    %     end
-    %     idMove = knnsearch(xe,xcIn,'K',1);
-    %     xe(idMove,:) = xcIn;
-    % end
+    xe = dataY.nodes;
 end
-xeAll = [xe; xeB];                      % Interior and boundary points 
-idYin = 1:size(xe,1);                   % Interior pts index
-idYbnd = size(xe,1)+1:size(xeAll,1);    % Boundary pts index
 %
 % Ensure center points are not too far from boundary and make evaluation point - stencil list 
 %
 if strcmp(mode,"unfitted")
-    xcAll = xcAll(unique(knnsearch(xcAll,xeAll,'K',ceil(extCoeff*n))),:);
+    xc = xc(unique(knnsearch(xc,xe,'K',ceil(extCoeff*n))),:);
+    N = size(xc,1);
 end
-N = length(xcAll);
-ptStencilList = knnsearch(xcAll,xeAll,'K',1);
+ptStencilList = knnsearch(xc,xe,'K',1);
 relXc = unique(ptStencilList); % stencil centres that are used directly
 %
 % Constructing global LS-RBF-FD approximation to evaluation and Laplace operators M x N
@@ -94,57 +84,57 @@ relXc = unique(ptStencilList); % stencil centres that are used directly
 Eglobal = spalloc(M,N,M*n);
 Lglobal = spalloc(M,N,M*n);
 for i = 1:length(relXc)
-    [idX,~] = knnsearch(xcAll,xcAll(relXc(i),:),'K',n);
-    xcLoc = xcAll(idX,:); % stencil
+    [idX,~] = knnsearch(xc,xc(relXc(i),:),'K',n);
+    xcLoc = xc(idX,:); % stencil
     Psi = RBFInterpMat(phi,pdeg,ep,xcLoc,xcLoc(1,:),max(sqrt(sum((xcLoc-xcLoc(1,:)).^2,2))));
     idY = find(ptStencilList==relXc(i));
-    E = RBFDiffMat(0,Psi,xeAll(idY,:));
-    L = RBFDiffMat(1.5,Psi,xeAll(idY,:));
+    E = RBFDiffMat(0,Psi,xe(idY,:));
+    L = RBFDiffMat(1.5,Psi,xe(idY,:));
     
     Eglobal(idY,idX) = E + Eglobal(idY,idX);
     Lglobal(idY,idX) = L + Lglobal(idY,idX);
 end
-L = Lglobal(idYin,:);
-B = Eglobal(idYbnd,:);
+L = Lglobal(dataY.inner,:);
+B = Eglobal(dataY.bnd,:);
 %
 % Manufactured solution to construct forcing and BC
 %
 if dim == 1
     fun = @(x) sin(2.*pi.*x);
     lapFun = @(x) -4.*(pi.^2).*sin(2.*pi.*x);
-    F = [lapFun(xe(:,1)); fun(xeB(:,1))];
-    uExact = fun(xeAll(:,1));
-    ucExact = fun(xcAll(:,1));
-    lapAnalytic = lapFun(xe(:,1));
+    F = [lapFun(xe(dataY.inner,1)); fun(xe(dataY.bnd,1))];
+    uExact = fun(xe(:,1));
+    ucExact = fun(xc(:,1));
+    lapAnalytic = lapFun(xe(dataY.inner,1));
     bndAnalytic = [0; 0];
 elseif dim == 2
     fun = @(x,y) sin(2.*pi.*x.*y);
     lapFun = @(x,y) - 4.*(x.^2).*(pi.^2).*sin(2.*pi.*x.*y) - 4.*(y.^2).*(pi.^2).*sin(2.*pi.*x.*y);
-    F = [lapFun(xe(:,1),xe(:,2)); fun(xeB(:,1),xeB(:,2))];
-    uExact = fun(xeAll(:,1),xeAll(:,2));
-    ucExact = fun(xcAll(:,1),xcAll(:,2));
-    lapAnalytic = lapFun(xe(:,1),xe(:,2));
-    bndAnalytic = fun(xeB(:,1),xeB(:,2));
+    F = [lapFun(xe(dataY.inner,1),xe(dataY.inner,2)); fun(xe(dataY.bnd,1),xe(dataY.bnd,2))];
+    uExact = fun(xe(:,1),xe(:,2));
+    ucExact = fun(xc(:,1),xc(:,2));
+    lapAnalytic = lapFun(xe(dataY.inner,1),xe(dataY.inner,2));
+    bndAnalytic = fun(xe(dataY.bnd,1),xe(dataY.bnd,2));
 elseif dim == 3
     fun = @(x,y,z) sin(2.*pi.*x.*y.*z);
     lapFun = @(x,y,z) - 4.*(x.^2).*(y.^2).*(pi.^2).*sin(2.*pi.*x.*y.*z) - 4.*(y.^2).*(z.^2).*(pi.^2).*sin(2.*pi.*x.*y.*z) - 4.*(x.^2).*(z.^2).*(pi.^2).*sin(2.*pi.*x.*y.*z);
-    F = [lapFun(xe(:,1),xe(:,2),xe(:,3)); fun(xeB(:,1),xeB(:,2),xeB(:,3))];
-    uExact = fun(xeAll(:,1),xeAll(:,2),xeAll(:,3));
-    ucExact = fun(xcAll(:,1),xcAll(:,2),xcAll(:,3));
-    lapAnalytic = lapFun(xe(:,1),xe(:,2),xe(:,3));
-    bndAnalytic = fun(xeB(:,1),xeB(:,2),xeB(:,3));
+    F = [lapFun(xe(dataY.inner,1),xe(dataY.inner,2),xe(dataY.inner,3)); fun(xe(dataY.bnd,1),xe(dataY.bnd,2),xe(dataY.bnd,3))];
+    uExact = fun(xe(:,1),xe(:,2),xe(:,3));
+    ucExact = fun(xc(:,1),xc(:,2),xc(:,3));
+    lapAnalytic = lapFun(xe(dataY.inner,1),xe(dataY.inner,2),xe(dataY.inner,3));
+    bndAnalytic = fun(xe(dataY.bnd,1),xe(dataY.bnd,2),xe(dataY.bnd,3));
 end 
 %
 % LS problem scaling
 %
 if scaling && strcmp(mode,"unfitted")
-    [~,dist] = knnsearch(xcAll,xcAll,'K',2);
+    [~,dist] = knnsearch(xc,xc,'K',2);
     h = max(dist(:,2));
-    Lscale = sqrt(V/length(idYin));
-    Bscale = sqrt(Area/length(idYbnd))*(h.^-1.5);
+    Lscale = sqrt(dataY.Vol/length(dataY.inner));
+    Bscale = sqrt(dataY.Area/length(dataY.bnd))*(h.^-1.5);
     L = Lscale.*L; B = Bscale.*B;
-    F(idYin) = Lscale.*F(idYin);
-    F(idYbnd) = Bscale.*F(idYbnd);
+    F(dataY.inner) = Lscale.*F(dataY.inner);
+    F(dataY.bnd) = Bscale.*F(dataY.bnd);
 end
 
 if strcmp(mode,"fitted")
@@ -170,12 +160,12 @@ ue = Eglobal*u;
 %
 if display
     % Plotting 
-    plotSolution(ue,uExact,xeAll,xeB,dim,geom);
+    plotSolution(ue,uExact,xe,dataY.bnd,dim,geom);
     %
     % Operator and solution l2 errors
     %
-    lapNumeric = Lglobal(idYin,:)*ucExact;
-    evalNumeric = Eglobal(idYbnd,:)*ucExact;
+    lapNumeric = Lglobal(dataY.inner,:)*ucExact;
+    evalNumeric = Eglobal(dataY.bnd,:)*ucExact;
     l2Error = norm(abs(ue-uExact),2)/norm(uExact,2);
     laplaceError = norm(lapAnalytic-lapNumeric,2)/norm(lapAnalytic,2);
     bndError = norm(evalNumeric-bndAnalytic,2)/(norm(bndAnalytic,2) + double(max(abs(bndAnalytic))==0));
@@ -186,7 +176,7 @@ end
 %
 % Plotting routines
 %
-function [] = plotSolution(uNumeric,uAnalytic,x,xB,dim,geom)
+function [] = plotSolution(uNumeric,uAnalytic,x,idB,dim,geom)
     error = uNumeric-uAnalytic;
     if dim == 1
         [x,id] = sort(x);
@@ -215,10 +205,10 @@ function [] = plotSolution(uNumeric,uAnalytic,x,xB,dim,geom)
         G=trisurf(T,x(:,1),x(:,2),uAnalytic);
         hold on
         if strcmp(geom,"ball")
-            plot(xB(:,1),xB(:,2),'k-',"LineWidth",1.5)
+            plot(x(idB,1),x(idB,2),'k-',"LineWidth",1.5)
         elseif strcmp(geom,"cube")
-            plot([max(xB(:,1)) max(xB(:,1)) min(xB(:,1)) min(xB(:,1)) max(xB(:,1))],...
-                 [max(xB(:,2)) min(xB(:,2)) min(xB(:,2)) max(xB(:,2)) max(xB(:,2))],'k-',"LineWidth",1.5)
+            plot([max(x(idB,1)) max(x(idB,1)) min(x(idB,1)) min(x(idB,1)) max(x(idB,1))],...
+                 [max(x(idB,2)) min(x(idB,2)) min(x(idB,2)) max(x(idB,2)) max(x(idB,2))],'k-',"LineWidth",1.5)
         end
         ax = gca;
         ax.FontSize = 18;
@@ -232,10 +222,10 @@ function [] = plotSolution(uNumeric,uAnalytic,x,xB,dim,geom)
         G=trisurf(T,x(:,1),x(:,2),uNumeric);
         hold on
         if strcmp(geom,"ball")
-            plot(xB(:,1),xB(:,2),'k-',"LineWidth",1.5)
+            plot(x(idB,1),x(idB,2),'k-',"LineWidth",1.5)
         elseif strcmp(geom,"cube")
-            plot([max(xB(:,1)) max(xB(:,1)) min(xB(:,1)) min(xB(:,1)) max(xB(:,1))],...
-                 [max(xB(:,2)) min(xB(:,2)) min(xB(:,2)) max(xB(:,2)) max(xB(:,2))],'k-',"LineWidth",1.5)
+            plot([max(x(idB,1)) max(x(idB,1)) min(x(idB,1)) min(x(idB,1)) max(x(idB,1))],...
+                 [max(x(idB,2)) min(x(idB,2)) min(x(idB,2)) max(x(idB,2)) max(x(idB,2))],'k-',"LineWidth",1.5)
         end
         ax = gca;
         ax.FontSize = 18;
@@ -249,10 +239,10 @@ function [] = plotSolution(uNumeric,uAnalytic,x,xB,dim,geom)
         G=trisurf(T,x(:,1),x(:,2),error);
         hold on
         if strcmp(geom,"ball")
-            plot(xB(:,1),xB(:,2),'k-',"LineWidth",1.5)
+            plot(x(idB,1),x(idB,2),'k-',"LineWidth",1.5)
         elseif strcmp(geom,"cube")
-            plot([max(xB(:,1)) max(xB(:,1)) min(xB(:,1)) min(xB(:,1)) max(xB(:,1))],...
-                 [max(xB(:,2)) min(xB(:,2)) min(xB(:,2)) max(xB(:,2)) max(xB(:,2))],'k-',"LineWidth",1.5)
+            plot([max(x(idB,1)) max(x(idB,1)) min(x(idB,1)) min(x(idB,1)) max(x(idB,1))],...
+                 [max(x(idB,2)) min(x(idB,2)) min(x(idB,2)) max(x(idB,2)) max(x(idB,2))],'k-',"LineWidth",1.5)
         end
         ax = gca;
         ax.FontSize = 18;
@@ -261,15 +251,15 @@ function [] = plotSolution(uNumeric,uAnalytic,x,xB,dim,geom)
         zlabel("$$u-u_E$$","Interpreter","latex","FontSize",24)
         set(G,'EdgeColor','none')
         shading interp
-    elseif dim == 3
-
-        bndPtCloud = pointCloud(xB);
+    elseif dim == 3 && ~strcmp(geom,"cube")
+        
+        bndPtCloud = pointCloud(x(idB,:));
         surfMesh = pc2surfacemesh(bndPtCloud,"ball-pivot");
         x = surfMesh.Vertices;
         T = surfMesh.Faces;
         
         figure()
-        G=trisurf(T,x(:,1),x(:,2),x(:,3),uAnalytic(end-length(xB)+1:end));
+        G=trisurf(T,x(:,1),x(:,2),x(:,3),uAnalytic(idB));
         axis equal
         ax = gca;
         ax.FontSize = 18;
@@ -282,7 +272,7 @@ function [] = plotSolution(uNumeric,uAnalytic,x,xB,dim,geom)
         shading interp
         
         figure()
-        G=trisurf(T,x(:,1),x(:,2),x(:,3),uNumeric(end-length(xB)+1:end));
+        G=trisurf(T,x(:,1),x(:,2),x(:,3),uNumeric(idB));
         axis equal
         ax = gca;
         ax.FontSize = 18;
@@ -295,7 +285,7 @@ function [] = plotSolution(uNumeric,uAnalytic,x,xB,dim,geom)
         shading interp
     
         figure()
-        G=trisurf(T,x(:,1),x(:,2),x(:,3),error(end-length(xB)+1:end));
+        G=trisurf(T,x(:,1),x(:,2),x(:,3),error(idB));
         axis equal
         ax = gca;
         ax.FontSize = 18;
@@ -306,6 +296,8 @@ function [] = plotSolution(uNumeric,uAnalytic,x,xB,dim,geom)
         cb = colorbar;
         ylabel(cb,"$$u-u_E$$","Interpreter","latex","FontSize",24,'Rotation',90)
         shading interp
+    else
+        disp("No plotting availablein 3D for this geometry")
     end
 end
 %
