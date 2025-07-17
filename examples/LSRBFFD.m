@@ -10,7 +10,7 @@ display = 1;                        % Plot solution
 geom = 'cube';                      % ball or cube
 mode = 'unfitted';                  % fitted, unfitted or collocation
 scaling = 1;                        % Include scaling of the unfitted LS problem
-mvCentres = 0;                      % Option to have a Y point on top of all X points inside the domain
+mvCentres = 1;                      % Option to have a Y point on top of all X points inside the domain
 q = 2;                              % Oversampling
 N = 500;                            % Number of center points
 ep = 1;                             % Not relevant for 'r3' basis
@@ -28,34 +28,53 @@ extCoeff = extCoeff*(strcmp(mode,"unfitted"));
 % Place N centre points and M evaluation points in geom with centre C and radius R
 %
 C = zeros(1,dim);
-R = sqrt(2);%1;
-[xc,xcB,V,Area] = getPts(geom,N,n,C,R,mode,extCoeff);
-xcAll = [xc; xcB];                                      % Interior and boundary points 
-idXin = 1:size(xc,1);                                   % Interior pts index
-idXbnd = size(xc,1)+1:size(xcAll,1);                    % Boundary pts index
+R = 1;
+if strcmp(geom,'cube')
+    R = R*(dim)^(1/2);
+end
+[dataX] = getPts(geom,N,n,C,R,mode,extCoeff);
+xcAll = dataX.nodes;                                     
 % 
 % For collocation, evaluation and centre points match
 %
 if strcmp(mode,"collocation")
     M = N;
-    xe = xc; xeB = xcB;
+    dataY = dataX;
+    xeAll = dataY.nodes;
 else
     M = q*N;
-    [xe,xeB] = getPts(geom,M,n,C,R,"fitted",0);
+    [dataY] = getPts(geom,M,n,C,R,"fitted",0);
+    xeAll = dataY.nodes;
     %
     % Move evaluation points inside to the closest center point
     %
     if mvCentres
-        xcIn = xc(sqrt(sum(xc.^2,2))<=R,:);
-        xeTemp = xe;
-        for i = 1:length(xcIn)
-            idMove = knnsearch(xeTemp,xcIn(i,:),'K',1);
-            xe(idMove,:) = xcIn(i,:);
-            xeTemp(idMove,:) = 2*R.*ones(1,dim);
+        iXdone = [];
+        xcIn = xcAll([dataX.inner; dataX.bnd],:);
+        xeIn = xeAll([dataY.inner; dataY.bnd],:);
+        idMvAll = knnsearch(xeIn,xcIn,'k',n*q);
+        i = 1;
+        idMv = idMvAll(:,i);
+        while length(iXdone) ~= size(xcIn,1)
+            [~,~,iX] = unique(idMv);
+            xeIn(idMv(unique(iX)),:) = xcIn(unique(iX),:);
+            iXdone = [iXdone; unique(iX)];
+            i = i + 1;
+            idMv = idMvAll(setdiff([1:size(xcIn)]',iXdone),i);
         end
-        idMove = knnsearch(xe,xcIn,'K',1);
-        xe(idMove,:) = xcIn;
+        dataY.nodes([dataY.inner; dataY.bnd],:) = xeIn;
     end
+    % if mvCentres
+    %     xcIn = xc(sqrt(sum(xc.^2,2))<=R,:);
+    %     xeTemp = xe;
+    %     for i = 1:length(xcIn)
+    %         idMove = knnsearch(xeTemp,xcIn(i,:),'K',1);
+    %         xe(idMove,:) = xcIn(i,:);
+    %         xeTemp(idMove,:) = 2*R.*ones(1,dim);
+    %     end
+    %     idMove = knnsearch(xe,xcIn,'K',1);
+    %     xe(idMove,:) = xcIn;
+    % end
 end
 xeAll = [xe; xeB];                      % Interior and boundary points 
 idYin = 1:size(xe,1);                   % Interior pts index
@@ -129,9 +148,9 @@ if scaling && strcmp(mode,"unfitted")
 end
 
 if strcmp(mode,"fitted")
-    Fmod = Lglobal(:,idXbnd)*ucExact(idXbnd);
+    Fmod = Lglobal(:,dataX.bnd)*ucExact(dataX.bnd);
     F = F-Fmod;
-    L = Lglobal(:,idXin);
+    L = Lglobal(:,dataX.inner);
     B = zeros(0,N);
 end
 %
@@ -143,7 +162,7 @@ u = A\F;
 % Fix operators to compute error measures
 %
 if strcmp(mode,"fitted")
-    u = [u; ucExact(idXbnd)];
+    u = [u; ucExact(dataX.bnd)];
 end
 ue = Eglobal*u;
 %
@@ -151,7 +170,7 @@ ue = Eglobal*u;
 %
 if display
     % Plotting 
-    plotSolution(ue,uExact,xeAll,xeB,dim);
+    plotSolution(ue,uExact,xeAll,xeB,dim,geom);
     %
     % Operator and solution l2 errors
     %
@@ -167,7 +186,7 @@ end
 %
 % Plotting routines
 %
-function [] = plotSolution(uNumeric,uAnalytic,x,xB,dim)
+function [] = plotSolution(uNumeric,uAnalytic,x,xB,dim,geom)
     error = uNumeric-uAnalytic;
     if dim == 1
         [x,id] = sort(x);
@@ -195,7 +214,12 @@ function [] = plotSolution(uNumeric,uAnalytic,x,xB,dim)
         figure()
         G=trisurf(T,x(:,1),x(:,2),uAnalytic);
         hold on
-        plot(xB(:,1),xB(:,2),'k-',"LineWidth",1.5)
+        if strcmp(geom,"ball")
+            plot(xB(:,1),xB(:,2),'k-',"LineWidth",1.5)
+        elseif strcmp(geom,"cube")
+            plot([max(xB(:,1)) max(xB(:,1)) min(xB(:,1)) min(xB(:,1)) max(xB(:,1))],...
+                 [max(xB(:,2)) min(xB(:,2)) min(xB(:,2)) max(xB(:,2)) max(xB(:,2))],'k-',"LineWidth",1.5)
+        end
         ax = gca;
         ax.FontSize = 18;
         xlabel("x","Interpreter","latex","FontSize",24)
@@ -207,7 +231,12 @@ function [] = plotSolution(uNumeric,uAnalytic,x,xB,dim)
         figure()
         G=trisurf(T,x(:,1),x(:,2),uNumeric);
         hold on
-        plot(xB(:,1),xB(:,2),'k-',"LineWidth",1.5)
+        if strcmp(geom,"ball")
+            plot(xB(:,1),xB(:,2),'k-',"LineWidth",1.5)
+        elseif strcmp(geom,"cube")
+            plot([max(xB(:,1)) max(xB(:,1)) min(xB(:,1)) min(xB(:,1)) max(xB(:,1))],...
+                 [max(xB(:,2)) min(xB(:,2)) min(xB(:,2)) max(xB(:,2)) max(xB(:,2))],'k-',"LineWidth",1.5)
+        end
         ax = gca;
         ax.FontSize = 18;
         xlabel("x","Interpreter","latex","FontSize",24)
@@ -219,7 +248,12 @@ function [] = plotSolution(uNumeric,uAnalytic,x,xB,dim)
         figure()
         G=trisurf(T,x(:,1),x(:,2),error);
         hold on
-        plot(xB(:,1),xB(:,2),'k-',"LineWidth",1.5)
+        if strcmp(geom,"ball")
+            plot(xB(:,1),xB(:,2),'k-',"LineWidth",1.5)
+        elseif strcmp(geom,"cube")
+            plot([max(xB(:,1)) max(xB(:,1)) min(xB(:,1)) min(xB(:,1)) max(xB(:,1))],...
+                 [max(xB(:,2)) min(xB(:,2)) min(xB(:,2)) max(xB(:,2)) max(xB(:,2))],'k-',"LineWidth",1.5)
+        end
         ax = gca;
         ax.FontSize = 18;
         xlabel("x","Interpreter","latex","FontSize",24)
@@ -277,7 +311,7 @@ end
 %
 % Point generation routine
 %
-function [x,xB,Vol,Area] = getPts(geom,N,n,C,R,mode,extCoeff)
+function [data] = getPts(geom,N,n,C,R,mode,extCoeff)
     dim = size(C,2);
     if strcmp(geom,'ball')
         dimRat = [1 1.2*4/pi 1.2*8/(4*pi/3)];       % Ratios between rectangle/circle, cube/sphere area and volume
@@ -314,57 +348,19 @@ function [x,xB,Vol,Area] = getPts(geom,N,n,C,R,mode,extCoeff)
         pos = pos(1:N-Nb);
         x = x(pos,:) + C;
         %
-        % Domain volume and area measures used for the scaling of the LS
-        % problem
+        % Organize outputs including labels for points inside, outside and on the boundary
         %
-        Vol = (dimACoeff(dim)*R^dim);
-        Area = (dimPCoeff(dim)*R^(dim-1));
-    end
-    
-    if strcmp(geom,'ball')
-        dimRat = [1 1.2*4/pi 1.2*8/(4*pi/3)];       % Ratios between rectangle/circle, cube/sphere area and volume
-        dimACoeff = [1 pi (4/3)*pi];                % constant for size of domain
-        dimPCoeff = [1 2*pi 4*pi];                  % constant for computing size of boundary
-        h = R/(0.5*N^(1/dim) - extCoeff*n^(1/dim)); % approximate fill distance
-        xB = zeros(0,dim);
+        data.nodes = [x; xB];
+        data.inner = find(sqrt(sum((x+C).^2,2))<=R);
+        data.outer = setdiff(1:size(x,1),data.inner)';
+        data.bnd = [size(x,1) + 1:size(x,1) + size(xB,1)]';
         %
-        % If using the unfitted method, no points on the boundary
+        % Domain volume and area measures used for the scaling of the LS problem
         %
-        if ~strcmp(mode,'unfitted')
-            % Boundary point generation
-            if dim == 1
-                xB = [-R, R]';
-            elseif dim == 2
-                Nb = ceil((dimPCoeff(dim)*R^(dim-1))/(dimACoeff(dim-1)*h^(dim-1)));
-                xB = [R*cos(linspace(-pi,pi-(2*pi)/(Nb+1),Nb)'), R*sin(linspace(-pi,pi-(2*pi)/(Nb+1),Nb)')];
-            elseif dim == 3
-                Nb = ceil((dimPCoeff(dim)*R^(dim-1))/(dimACoeff(dim-1)*(0.5*h)^(dim-1)));
-                % Fibonacci points on sphere
-                ratio = 1+sqrt(5);
-                ind = [0:Nb-1]' + 0.5;
-                theta = pi*ratio*ind;
-                fi = acos(1-(2*ind)/(Nb));
-                xB = [R.*sin(fi).*cos(theta), R.*sin(fi).*sin(theta), R.*cos(fi)];
-            end
-        end
-        Nb = length(xB);
-        % Interior point generation
-        Ncube = ceil(dimRat(dim)*(N-Nb));
-        x = 2*(R+n^(1/dim)*h*extCoeff)*(halton(Ncube,dim)-0.5);
-        r2 = sqrt(sum(x.^2,2));
-        pos = find(r2<=(R+n^(1/dim)*h*extCoeff));
-        pos = pos(1:N-Nb);
-        x = x(pos,:) + C;
-        %
-        % Domain volume and area measures used for the scaling of the LS
-        % problem
-        %
-        Vol = (dimACoeff(dim)*R^dim);
-        Area = (dimPCoeff(dim)*R^(dim-1));
+        data.Vol = (dimACoeff(dim)*R^dim);
+        data.Area = (dimPCoeff(dim)*R^(dim-1));
     elseif strcmp(geom,'cube')
-        dimACoeff = [1 2 8*sqrt(3)/9];                % constant for size of domain
-        dimPCoeff = [1 4*sqrt(2) 8];                  % constant for computing size of boundary
-        dimLCoeff = [1 sqrt(2)/2 sqrt(3)/3];          % constant for computing size of boundary
+        dimLCoeff = [1 sqrt(2)/2 sqrt(3)/3];          % constants for getting cube side length /2
         h = R/(0.5*N^(1/dim) - extCoeff*n^(1/dim));   % approximate fill distance
         xB = zeros(0,dim);
         %
@@ -375,22 +371,32 @@ function [x,xB,Vol,Area] = getPts(geom,N,n,C,R,mode,extCoeff)
             if dim == 1
                 xB = [-R, R]';
             elseif dim == 2
-                Nb = ceil((dimPCoeff(dim)*R^(dim-1))/(dimACoeff(dim-1)*h^(dim-1)));
-                xLim = C(1) + [-dimLCoeff(dim)*R dimLCoeff(dim)*R];
-                yLim = C(2) + [-dimLCoeff(dim)*R dimLCoeff(dim)*R];
-                xB = [linspace(xLim(1),xLim(2),floor(Nb/4))', ones(floor(Nb/4),1)*yLim(1);...
-                      ones(floor(Nb/4),1)*xLim(1), linspace(yLim(1),yLim(2),floor(Nb/4))';...
-                      linspace(xLim(1),xLim(2),floor(Nb/4))', ones(floor(Nb/4),1)*yLim(2);...
-                      ones(floor(Nb/4),1)*xLim(2), linspace(yLim(1),yLim(2),floor(Nb/4))'];
+                Nb = ceil(((2*dimLCoeff(dim)*R)^(dim-1))/(h^(dim-1)));
+                XYZLim = [-dimLCoeff(dim)*R dimLCoeff(dim)*R];
+                xB = [linspace(XYZLim(1),XYZLim(2),Nb)', ones(Nb,1)*XYZLim(1);...
+                      ones(Nb,1)*XYZLim(1), linspace(XYZLim(1),XYZLim(2),Nb)';...
+                      linspace(XYZLim(1),XYZLim(2),Nb)', ones(Nb,1)*XYZLim(2);...
+                      ones(Nb,1)*XYZLim(2), linspace(XYZLim(1),XYZLim(2),Nb)'];
                 xB = unique(xB,'rows');
+                xB = xB + C;
             elseif dim == 3
-                Nb = ceil((dimPCoeff(dim)*R^(dim-1))/(dimACoeff(dim-1)*h^(dim-1)));
-                xLim = C(1) + [-sqrt(3)*R sqrt(3)*R];
-                yLim = C(2) + [-sqrt(3)*R sqrt(3)*R];
-                zLim = C(3) + [-sqrt(3)*R sqrt(3)*R];
-                % xB = [linspace(xLim(1),xLim(2),floor(Nb/12))', linspace(yLim(1),yLim(2),floor(Nb/12))', zlim(1);...
-                %       linspace(xLim(1),xLim(2),floor(Nb/12))', linspace(yLim(1),yLim(2),floor(Nb/12))', zlim(1);...
-                %       ];
+                NbF = ceil(((2*dimLCoeff(dim)*R)^(dim-1))/(h^(dim-1)));     % Number of points on each face
+                NbE = ceil(2*dimLCoeff(dim)/h);                             % Number of points on each edge
+                XYZLim = [-dimLCoeff(dim)*R dimLCoeff(dim)*R];
+                xB = [linspace(XYZLim(1),XYZLim(2),NbE)', ones(NbE,1)*XYZLim(1), ones(NbE,1)*XYZLim(1);...
+                      ones(NbE,1)*XYZLim(1), linspace(XYZLim(1),XYZLim(2),NbE)', ones(NbE,1)*XYZLim(1);...
+                      linspace(XYZLim(1),XYZLim(2),NbE)', ones(NbE,1)*XYZLim(2), ones(NbE,1)*XYZLim(1);...
+                      ones(NbE,1)*XYZLim(2), linspace(XYZLim(1),XYZLim(2),NbE)', ones(NbE,1)*XYZLim(1)];
+                xB = [xB; [1,1,-1].*xB];
+                Ry = eye(dim); Ry(1,1) = cos(pi/2); Ry(dim,dim) = cos(pi/2); Ry(dim,1) = -sin(pi/2); Ry(1,dim) = sin(pi/2); % Rotate 90 degrees along y-axis
+                xB = [xB; (Ry*xB')'];
+                xB = unique(xB,'rows');
+                Rx = eye(dim); Rx(dim-1,dim-1) = cos(pi/2); Rx(dim,dim) = cos(pi/2); Rx(dim-1,dim) = -sin(pi/2); Rx(dim,dim-1) = sin(pi/2); % Rotate 90 degrees
+                xBF = [2*(dimLCoeff(dim)*R)*(halton(NbF,dim-1)-0.5), ones(NbF,1)*XYZLim(1)];
+                xBF = [xBF; [1,1,-1].*xBF];
+                xB = [xB; xBF];
+                xB = [xB; (Rx*xBF')'];
+                xB = [xB; (Ry*xBF')'];
             end
         end
         Nb = length(xB);
@@ -399,11 +405,17 @@ function [x,xB,Vol,Area] = getPts(geom,N,n,C,R,mode,extCoeff)
         r2 = sqrt(sum(x.^2,2));
         x = x + C;
         %
-        % Domain volume and area measures used for the scaling of the LS
-        % problem
+        % Organize outputs including labels for points inside, outside and on the boundary
         %
-        Vol = (dimACoeff(dim)*R^dim);
-        Area = (dimPCoeff(dim)*R^(dim-1));
+        data.nodes = [x; xB];
+        data.inner = find(all(abs(x-C)<=dimLCoeff(dim)*R,2));
+        data.outer = setdiff(1:size(x,1),data.inner)';
+        data.bnd = [size(x,1) + 1:size(x,1) + size(xB,1)]';
+        %
+        % Domain volume and area measures used for the scaling of the LS problem
+        %
+        data.Vol = (2*dimLCoeff(dim)*R)^dim;
+        data.Area = 2*dim*(2*dimLCoeff(dim)*R)^(dim-1);
     end
 end
 
