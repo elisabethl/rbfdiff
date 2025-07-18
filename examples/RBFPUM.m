@@ -5,75 +5,49 @@ setPaths;
 % An RBF-FD example for solving the Poisson equation. Collocation and LS
 % unfitted or fitted methods.
 %
-dim = 3;                            % dim = 1,2 or 3
+dim = 2;                            % dim = 1,2 or 3
 display = 1;                        % Plot solution
 geom = 'cube';                      % ball or cube
-mode = 'fitted';                  % fitted, unfitted or collocation
+mode = 'unfitted';                  % fitted, unfitted or collocation
 scaling = 1;                        % Include scaling of the unfitted LS problem
-mvCentres = 1;                      % Option to have a Y point on top of all X points inside the domain
+mvCentres = 0;                      % Option to have a Y point on top of all X points inside the domain
 q = 2;                              % Oversampling
-N = 1000;                            % Number of center points (X)
-ep = 1;                             % Not relevant for 'r3' basis
-phi = 'r3';                         % Choice of basis 'r3', 'mq', 'gs', 'iq', 'rbfqr'
-pdeg = 2;                           % Polynomial extension, not relevant for 'rbfqr'
-rbfDeg = 4;                         % Relevant when there is no polynomial extension
-extCoeff = 0.5;                     % Extension size (in % of stencil), relevant for unfitted method
-if pdeg == -1
-    n = nchoosek(rbfDeg+dim-1,dim); % Order in smooth RBF case
-else
-    n = 2*nchoosek(pdeg+dim,dim);   % Stencil size
-end
-extCoeff = extCoeff*(strcmp(mode,"unfitted"));
+N = 30;                             % Number of center points (X) in each patch
+P = 25;                             % Number of patches
+ep = 0.01;                          % Not relevant for 'r3' basis
+phi = 'rbfqr';                      % Choice of basis 'r3', 'mq', 'gs', 'iq', 'rbfqr'
+pdeg = -1;                          % Polynomial extension, not relevant for 'rbfqr'
+del = 0.1;                     % Overlap between patches
 %
-% Place N centre points and M evaluation points in geom with centre C and radius R
+% Place P patches and M evaluation points in geom with centre C and radius R
 %
 C = zeros(1,dim);
-R = 1;
 if strcmp(geom,'cube')
-    R = R*(dim)^(1/2);
-end
-[dataX] = getPts(geom,N,n,C,R,mode,extCoeff);
-xc = dataX.nodes;                                     
-% 
-% For collocation, evaluation and centre points match
-%
-if strcmp(mode,"collocation")
-    M = N;                                      % Number of evaluation points (Y)
-    dataY = dataX;
-    xe = dataY.nodes;
+    R = 1*(dim)^(1/2);
+elseif strcmp(geom,'ball')
+    R = 1;
 else
-    M = q*N;                                    % Number of evaluation points (Y)
-    [dataY] = getPts(geom,M,n,C,R,"fitted",0);
-    %
-    % Move evaluation points inside (and on the boundary) to the closest center point.
-    % Make sure not to move two evaluation points to the same center point. All
-    % center points should be moved to.
-    %
-    if mvCentres
-        iXdone = [];
-        xcIn = xc([dataX.inner; dataX.bnd],:);
-        xeIn = dataY.nodes([dataY.inner; dataY.bnd],:);
-        idMvAll = knnsearch(xeIn,xcIn,'k',n*q);
-        i = 1;
-        idYmv = idMvAll(:,i);
-        idXmv = [1:size(xcIn)]';
-        while length(iXdone) ~= size(xcIn,1) % ensure all center points inside have an evaulation point
-            [unIdYmv,iX,~] = unique(idYmv);
-            xeIn(unIdYmv,:) = xcIn(idXmv(iX),:);
-            iXdone = [iXdone; idXmv(iX)];
-            i = i + 1;
-            idXmv = setdiff(idXmv,iXdone);
-            idYmv = idMvAll(idXmv,i);
-        end
-        dataY.nodes([dataY.inner; dataY.bnd],:) = xeIn;
-    end
-    xe = dataY.nodes;
+    disp("Requested geometry not implemented yet");
+    return;
 end
+
+M = N*P*q;                                  % Number of evaluation points (Y)
+[dataY] = getPts(geom,M,0,C,R,"fitted",0);
+xe = dataY.nodes;                         
+
+ptch.R = 2*R/((2+del)*ceil(P^(1/dim)) - del);
+XC = linspace(-1+(sqrt(2)/2)*ptch.R,1-(sqrt(2)/2)*ptch.R,ceil(N^(1/dim)));
+YC = linspace(-1+(sqrt(2)/2)*ptch.R,1-(sqrt(2)/2)*ptch.R,ceil(N^(1/dim)));
+[XC,YC] = meshgrid(XC,YC);
+ptch.C = [XC(:),YC(:)];
+ptch.R = ptch.R*ones(size(ptch.C,1),1);
+% ptch.C = 
 %
 % Ensure center points are not too far from boundary and make evaluation point - stencil list 
 %
+
 if strcmp(mode,"unfitted")
-    xc = xc(unique(knnsearch(xc,xe,'K',ceil(extCoeff*n))),:);
+    xc = xc(unique(knnsearch(xc,xe,'K',ceil(extCoeff*n+eps(1)))),:);
     N = size(xc,1);
 end
 ptStencilList = knnsearch(xc,xe,'K',1);
@@ -383,6 +357,7 @@ function [data] = getPts(geom,N,n,C,R,mode,extCoeff)
                 Ry = eye(dim); Ry(1,1) = cos(pi/2); Ry(dim,dim) = cos(pi/2); Ry(dim,1) = -sin(pi/2); Ry(1,dim) = sin(pi/2); % Rotate 90 degrees along y-axis
                 xB = [xB; (Ry*xB')'];
                 xB = unique(xB,'rows');
+                NbE = size(xB,1);
                 Rx = eye(dim); Rx(dim-1,dim-1) = cos(pi/2); Rx(dim,dim) = cos(pi/2); Rx(dim-1,dim) = -sin(pi/2); Rx(dim,dim-1) = sin(pi/2); % Rotate 90 degrees
                 xBF = [2*(dimLCoeff(dim)*R)*(halton(NbF,dim-1)-0.5), ones(NbF,1)*XYZLim(1)];
                 xBF = [xBF; [1,1,-1].*xBF];
@@ -410,19 +385,28 @@ function [data] = getPts(geom,N,n,C,R,mode,extCoeff)
         data.Area = 2*dim*(2*dimLCoeff(dim)*R)^(dim-1);
     end
 end
-
-% figure()
-% xBplot = C + [R*cos(linspace(0,2*pi,1000))', R*sin(linspace(0,2*pi,1000))'];
-% plot(xBplot(:,1),xBplot(:,2),'k-',"LineWidth",2.5)
-% hold on
-% plot(xc(:,1),xc(:,2),'rx','LineWidth',2,'MarkerSize',10)
-% plot(xe(:,1),xe(:,2),'k.','LineWidth',2,'MarkerSize',15)
-% plot(xeB(:,1),xeB(:,2),'b.','LineWidth',2,'MarkerSize',15)
-% ax = gca;
-% ax.FontSize = 18;
-% xlabel("x","Interpreter","latex","FontSize",24)
-% ylabel("y","Interpreter","latex","FontSize",24,'Rotation',0)
-% legend('Domain, $$\Omega$$','Center points','Interior eval points','Boundary eval points',"Interpreter","latex",'Location','south','NumColumns',2,'Orientation','horizontal','FontSize',18)
-% xlim(ax, [-1.2 1.2]);
-% ylim(ax, [-1.8 1.2]);
-% axis equal
+%
+% Patch plotting routine
+%
+function [] = plotPtch(ptch,geom,C,R)
+    theta = linspace(0,2*pi,100)';
+    dim = size(C,2);
+    figure()    
+    hold on
+    for i = 1:size(ptch.C,1)
+        plot(ptch.C(i,1),ptch.C(i,2),'ro');
+        x = ptch.C(i,:) + [ptch.R(i)*cos(theta), ptch.R(i)*sin(theta)];
+        plot(x(:,1),x(:,2),'k-')
+    end
+    axis equal
+    if strcmp(geom,"cube")
+        dimLCoeff = [1 sqrt(2)/2 sqrt(3)/3];   
+        a = dimLCoeff(dim)*R;
+        x = [C + [a a]; ...
+             C + [a -a]; ...
+             C + [-a -a]; ...
+             C + [-a a]; ...
+             C + [a a]];
+        plot(x(:,1),x(:,2),'k-');
+    end
+end
