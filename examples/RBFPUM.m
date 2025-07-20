@@ -12,12 +12,12 @@ mode = 'unfitted';                  % fitted, unfitted or collocation
 scaling = 1;                        % Include scaling of the unfitted LS problem
 mvCentres = 0;                      % Option to have a Y point on top of all X points inside the domain
 q = 2;                              % Oversampling
-N = 30;                             % Number of center points (X) in each patch
-P = 25;                             % Number of patches
-ep = 0.01;                          % Not relevant for 'r3' basis
-phi = 'rbfqr';                      % Choice of basis 'r3', 'mq', 'gs', 'iq', 'rbfqr'
+N = 120;                             % Number of center points (X) in each patch
+P = 4;                             % Number of patches
+ep = 1;                          % Not relevant for 'r3' basis
+phi = 'mq';                      % Choice of basis 'r3', 'mq', 'gs', 'iq', 'rbfqr'
 pdeg = -1;                          % Polynomial extension, not relevant for 'rbfqr'
-del = 0.1;                     % Overlap between patches
+del = .2;                     % Overlap between patches
 %
 % Place P patches and M evaluation points in geom with centre C and radius R
 %
@@ -35,41 +35,38 @@ M = N*P*q;                                  % Number of evaluation points (Y)
 [dataY] = getPts(geom,M,0,C,R,"fitted",0);
 xe = dataY.nodes;                         
 
-ptch.R = 2*R/((2+del)*ceil(P^(1/dim)) - del);
-XC = linspace(-1+(sqrt(2)/2)*ptch.R,1-(sqrt(2)/2)*ptch.R,ceil(N^(1/dim)));
-YC = linspace(-1+(sqrt(2)/2)*ptch.R,1-(sqrt(2)/2)*ptch.R,ceil(N^(1/dim)));
-[XC,YC] = meshgrid(XC,YC);
-ptch.C = [XC(:),YC(:)];
+ptch.R = (2*R)/((2-del)*ceil(P^(1/dim)) - del); % Ensureoverlap in cartesian domain (Along diagonal)
+Cx = linspace(-1+(sqrt(2)/2)*(1-del)*ptch.R,1-(sqrt(2)/2)*(1-del)*ptch.R,ceil(P^(1/dim)));
+Cy = linspace(-1+(sqrt(2)/2)*(1-del)*ptch.R,1-(sqrt(2)/2)*(1-del)*ptch.R,ceil(P^(1/dim)));
+[Cx,Cy] = meshgrid(Cx,Cy);
+ptch.C = [Cx(:),Cy(:)];
 ptch.R = ptch.R*ones(size(ptch.C,1),1);
-% ptch.C = 
-%
-% Ensure center points are not too far from boundary and make evaluation point - stencil list 
-%
-
-if strcmp(mode,"unfitted")
-    xc = xc(unique(knnsearch(xc,xe,'K',ceil(extCoeff*n+eps(1)))),:);
-    N = size(xc,1);
+plotPtch(ptch,geom,C,R)
+P = length(ptch.R);
+xc = [];
+for i = 1:P
+    [ptch.xc(i)] = getPts("ball",N,0,ptch.C(i,:),ptch.R(i),"unfitted",0);
+    ptch.xe(i).globalId = find(sqrt(sum((xe - ptch.C(i,:)).^2,2)) <= ptch.R(i));
+    ptch.xe(i).nodes = xe(ptch.xe(i).globalId,:);
+    xc = [xc; ptch.xc(i).nodes];
 end
-ptStencilList = knnsearch(xc,xe,'K',1);
-relXc = unique(ptStencilList); % stencil centres that are used directly
 %
-% Constructing global LS-RBF-FD approximation to evaluation and Laplace operators M x N
+% Constructing global RBF-PUM approximation to evaluation and Laplace operators M x N
 %
-Eglobal = spalloc(M,N,M*n);
-Lglobal = spalloc(M,N,M*n);
-for i = 1:length(relXc)
-    [idX,~] = knnsearch(xc,xc(relXc(i),:),'K',n);
-    xcLoc = xc(idX,:); % stencil
-    Psi = RBFInterpMat(phi,pdeg,ep,xcLoc,xcLoc(1,:),max(sqrt(sum((xcLoc-xcLoc(1,:)).^2,2))));
-    idY = find(ptStencilList==relXc(i));
-    E = RBFDiffMat(0,Psi,xe(idY,:));
-    L = RBFDiffMat(1.5,Psi,xe(idY,:));
+Eglobal = spalloc(M,P*N,M*N);
+Lglobal = spalloc(M,P*N,M*N);
+for i = 1:P
+    Psi = RBFInterpMat(phi,pdeg,ep,ptch.xc(i).nodes,ptch.C(i,:),ptch.R(i));
+    E = RBFDiffMat(0,Psi,ptch.xe(i).nodes);
+    L = RBFDiffMat(1.5,Psi,ptch.xe(i).nodes);
     
-    Eglobal(idY,idX) = E + Eglobal(idY,idX);
-    Lglobal(idY,idX) = L + Lglobal(idY,idX);
+    Eglobal(ptch.xe(i).globalId,(i-1)*N+1:i*N) = E + Eglobal(ptch.xe(i).globalId,(i-1)*N+1:i*N);
+    Lglobal(ptch.xe(i).globalId,(i-1)*N+1:i*N) = L + Lglobal(ptch.xe(i).globalId,(i-1)*N+1:i*N);
 end
 L = Lglobal(dataY.inner,:);
 B = Eglobal(dataY.bnd,:);
+L = (sum(L~=0,2)./P/N).*L;
+B = (sum(B~=0,2)./P/N).*B;
 %
 % Manufactured solution to construct forcing and BC
 %
@@ -317,7 +314,7 @@ function [data] = getPts(geom,N,n,C,R,mode,extCoeff)
         % Organize outputs including labels for points inside, outside and on the boundary
         %
         data.nodes = [x; xB];
-        data.inner = find(sqrt(sum((x+C).^2,2))<=R);
+        data.inner = find(sqrt(sum((x-C).^2,2))<=R);
         data.outer = setdiff(1:size(x,1),data.inner)';
         data.bnd = [size(x,1) + 1:size(x,1) + size(xB,1)]';
         %

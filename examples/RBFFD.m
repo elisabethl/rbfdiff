@@ -8,7 +8,7 @@ setPaths;
 dim = 2;                            % dim = 1,2 or 3
 display = 1;                        % Plot solution
 geom = 'ball';                      % ball or cube
-mode = 'fitted';                  % fitted, unfitted or collocation
+mode = 'unfitted';                  % fitted, unfitted or collocation
 scaling = 1;                        % Include scaling of the unfitted LS problem
 mvCentres = 1;                      % Option to have a Y point on top of all X points inside the domain
 q = 2;                              % Oversampling
