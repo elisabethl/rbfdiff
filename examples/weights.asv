@@ -1,4 +1,4 @@
-function [w] = weights(psi,ndiff,ptch)
+function [f s sGrad sHess] = weights(psi,ndiff,ptch)
 %
 % Prepare cell arrays for sums of generating functions and derivatives
 %
@@ -68,7 +68,7 @@ for p = 1:length(ptch.R)
             sGrad{d}(ptch.xe(p).globalId) = sGrad{d}(ptch.xe(p).globalId) + fTemp{d+1};
         end
         f{p}.L = fTemp{end};
-        sL(ptch.xe(p).globalId) = sL(ptch.xe(p).globalId) + fTemp{end};
+        sL(ptch.xe(p).globalId,1) = sL(ptch.xe(p).globalId,1) + fTemp{end};
     elseif (ndiff==2)
         f{p}.f = fTemp{1};
         f{p}.grad = {};
@@ -104,8 +104,7 @@ for p = 1:length(ptch.R)
         end
     elseif (ndiff==1.5)
         w{p}.f = f{p}.f./sLoc;
-        w{p}.L = (f{p}.L-w{p}.f.*sL(ptch.xe(p).globalId))./sLoc;
-        w{p}.grad = {};
+        w{p}.L = (f{p}.L-w{p}.f.*sL{d}(ptch.xe(p).globalId,1))./sLoc;
         for d = 1:dim
             w{p}.grad{end+1} = (f{p}.grad{d} - w{p}.f.*sGrad{d}(ptch.xe(p).globalId))./sLoc;
             w{p}.L = w{p}.L - 2.*w{p}.grad{end}.*sGrad{d}(ptch.xe(p).globalId)./sLoc;
@@ -118,12 +117,11 @@ for p = 1:length(ptch.R)
         end
         for k = dim+2:length(op)
             if length(opDim{k}) == 1 
-                w{p}.hess{opDim{k},opDim{k}} = (f{p}.hess{opDim{k},opDim{k}}-...
+                w{p}.hess{opDim{k},opDim{k}} = (fTemp{k}-...
                                                2.*w{p}.grad{opDim{k}}.*sGrad{opDim{k}}(ptch.xe(p).globalId)-...
                                                sHess{opDim{k},opDim{k}}(ptch.xe(p).globalId))./sLoc;
             else
-                w{p}.hess{opDim{k}(1),opDim{k}(2)} = (f{p}.hess{opDim{k}(1),opDim{k}(2)}-...
-                                                       w{p}.grad{opDim{k}(1)}.*sGrad{opDim{k}(2)}(ptch.xe(p).globalId)-...
+                w{p}.hess{opDim{k}(1),opDim{k}(2)} = (fTemp{k}-w{p}.grad{opDim{k}(1)}.*sGrad{opDim{k}(2)}(ptch.xe(p).globalId)-...
                                                        w{p}.grad{opDim{k}(2)}.*sGrad{opDim{k}(1)}(ptch.xe(p).globalId)- ...
                                                        sHess{opDim{k}(1),opDim{k}(2)}(ptch.xe(p).globalId))./sLoc;
                 w{p}.hess{opDim{k}(2),opDim{k}(1)} = w{p}.hess{opDim{k}(1),opDim{k}(2)};

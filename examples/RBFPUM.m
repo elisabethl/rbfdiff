@@ -12,13 +12,13 @@ mode = 'unfitted';                  % fitted, unfitted or collocation
 scaling = 1;                        % Include scaling of the unfitted LS problem
 mvCentres = 0;                      % Option to have a Y point on top of all X points inside the domain
 q = 2;                              % Oversampling
-N = 120;                             % Number of center points (X) in each patch
+N = 20;                             % Number of center points (X) in each patch
 P = 4;                             % Number of patches
 ep = 1;                          % Not relevant for 'r3' basis
 phi = 'mq';                      % Choice of basis 'r3', 'mq', 'gs', 'iq', 'rbfqr'
 psi = 'bump';                        % Weight function
 pdeg = -1;                          % Polynomial extension, not relevant for 'rbfqr'
-del = .2;                     % Overlap between patches
+del = .35;                     % Overlap between patches
 %
 % Place P patches and M evaluation points in geom with centre C and radius R
 %
@@ -56,14 +56,18 @@ end
 %
 Eglobal = spalloc(M,P*N,M*N);
 Lglobal = spalloc(M,P*N,M*N);
-[w, s] = weights(psi,2,ptch);
+[w] = weights(psi,1.5,ptch);
 for i = 1:P
     Psi = RBFInterpMat(phi,pdeg,ep,ptch.xc(i).nodes,ptch.C(i,:),ptch.R(i));
     E = RBFDiffMat(0,Psi,ptch.xe(i).nodes);
+    B = RBFDiffMat(1,Psi,ptch.xe(i).nodes);
     L = RBFDiffMat(1.5,Psi,ptch.xe(i).nodes);
     
-    Eglobal(ptch.xe(i).globalId,(i-1)*N+1:i*N) = E + Eglobal(ptch.xe(i).globalId,(i-1)*N+1:i*N);
-    Lglobal(ptch.xe(i).globalId,(i-1)*N+1:i*N) = L + Lglobal(ptch.xe(i).globalId,(i-1)*N+1:i*N);
+    Eglobal(ptch.xe(i).globalId,(i-1)*N+1:i*N) = w{i}.f'.*E + Eglobal(ptch.xe(i).globalId,(i-1)*N+1:i*N);
+    for d = 1:dim
+        Lglobal(ptch.xe(i).globalId,(i-1)*N+1:i*N) =  2.*w{i}.grad{d}'.*B{d} + Lglobal(ptch.xe(i).globalId,(i-1)*N+1:i*N);
+    end
+    Lglobal(ptch.xe(i).globalId,(i-1)*N+1:i*N) = w{i}.L'.*E + w{i}.f'.*L + Lglobal(ptch.xe(i).globalId,(i-1)*N+1:i*N);
 end
 L = Lglobal(dataY.inner,:);
 B = Eglobal(dataY.bnd,:);
