@@ -16,6 +16,7 @@ N = 120;                             % Number of center points (X) in each patch
 P = 4;                             % Number of patches
 ep = 1;                          % Not relevant for 'r3' basis
 phi = 'mq';                      % Choice of basis 'r3', 'mq', 'gs', 'iq', 'rbfqr'
+psi = 'bump';                        % Weight function
 pdeg = -1;                          % Polynomial extension, not relevant for 'rbfqr'
 del = .2;                     % Overlap between patches
 %
@@ -55,6 +56,7 @@ end
 %
 Eglobal = spalloc(M,P*N,M*N);
 Lglobal = spalloc(M,P*N,M*N);
+[w, s] = weights(psi,2,ptch);
 for i = 1:P
     Psi = RBFInterpMat(phi,pdeg,ep,ptch.xc(i).nodes,ptch.C(i,:),ptch.R(i));
     E = RBFDiffMat(0,Psi,ptch.xe(i).nodes);
