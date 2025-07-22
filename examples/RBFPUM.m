@@ -8,17 +8,18 @@ setPaths;
 dim = 2;                            % dim = 1,2 or 3
 display = 1;                        % Plot solution
 geom = 'cube';                      % ball or cube
-mode = 'unfitted';                  % fitted, unfitted or collocation
+mode = 'fitted';                    % fitted, unfitted or collocation
+bcMode = 'weak';                  % strong or weak imposition of boundary conditions (only relevant for fitted)
 scaling = 1;                        % Include scaling of the unfitted LS problem
-mvCentres = 0;                      % Option to have a Y point on top of all X points inside the domain
+mvCentres = 1;                      % Option to have a Y point on top of all X points inside the domain
 q = 2;                              % Oversampling
-N = 20;                             % Number of center points (X) in each patch
-P = 4;                             % Number of patches
-ep = 1;                          % Not relevant for 'r3' basis
-phi = 'mq';                      % Choice of basis 'r3', 'mq', 'gs', 'iq', 'rbfqr'
-psi = 'bump';                        % Weight function
+N = 28;                             % Number of center points (X) in each patch
+P = 25;                             % Number of patches
+ep = 0.01;                          % Not relevant for 'r3' basis
+phi = 'rbfqr';                      % Choice of basis 'r3', 'mq', 'gs', 'iq', 'rbfqr'
+psi = 'wendland_c2';                % Weight function: wendland_c2 or bump
 pdeg = -1;                          % Polynomial extension, not relevant for 'rbfqr'
-del = .35;                     % Overlap between patches
+del = 0.2;                          % Overlap between patches
 %
 % Place P patches and M evaluation points in geom with centre C and radius R
 %
@@ -31,26 +32,93 @@ else
     disp("Requested geometry not implemented yet");
     return;
 end
-
-M = N*P*q;                                  % Number of evaluation points (Y)
-[dataY] = getPts(geom,M,0,C,R,"fitted",0);
-xe = dataY.nodes;                         
-
-ptch.R = (2*R)/((2-del)*ceil(P^(1/dim)) - del); % Ensureoverlap in cartesian domain (Along diagonal)
-Cx = linspace(-1+(sqrt(2)/2)*(1-del)*ptch.R,1-(sqrt(2)/2)*(1-del)*ptch.R,ceil(P^(1/dim)));
-Cy = linspace(-1+(sqrt(2)/2)*(1-del)*ptch.R,1-(sqrt(2)/2)*(1-del)*ptch.R,ceil(P^(1/dim)));
-[Cx,Cy] = meshgrid(Cx,Cy);
-ptch.C = [Cx(:),Cy(:)];
-ptch.R = ptch.R*ones(size(ptch.C,1),1);
-plotPtch(ptch,geom,C,R)
+%
+% Get patches 
+%
+ptch = getPtch(geom,P,C,R,del);
 P = length(ptch.R);
-xc = [];
-for i = 1:P
-    [ptch.xc(i)] = getPts("ball",N,0,ptch.C(i,:),ptch.R(i),"unfitted",0);
-    ptch.xe(i).globalId = find(sqrt(sum((xe - ptch.C(i,:)).^2,2)) <= ptch.R(i));
-    ptch.xe(i).nodes = xe(ptch.xe(i).globalId,:);
-    xc = [xc; ptch.xc(i).nodes];
+%
+% Get center points (X)
+%
+if strcmp(mode,"unfitted")
+    dataX.nodes = [];            % Centers
+    for i = 1:P
+        [ptch.xc(i)] = getPts("ball",N,0,ptch.C(i,:),ptch.R(i),"unfitted",0);
+        xCglobalId{i} = [(i-1)*N+1:i*N]';
+        dataX.nodes = [dataX.nodes; ptch.xc(i).nodes];
+    end
+    xc = dataX.nodes;
+    [ptch.xc.globalId] = xCglobalId{:};
+    if strcmp(geom,"ball")
+        dataX.inner = find(sqrt(sum((xc-C).^2,2))<=R);
+    elseif strcmp(geom,"cube")
+        dimLCoeff = [1 sqrt(2)/2 sqrt(3)/3];  
+        dataX.inner = find(all(abs(xc-C)<=dimLCoeff(dim)*R,2));
+    end
+    dataX.outer = setdiff(1:size(xc,1),dataX.inner);
+    dataX.bnd = [];
+elseif strcmp(mode,"collocation")
+    dataX = getPts(geom,N*P,0,C,R,"fitted",0);
+    xc = dataX.nodes;
+    for i = 1:P
+        ptch.xc(i).globalId = find(sqrt(sum((xc - ptch.C(i,:)).^2,2)) <= ptch.R(i));
+        ptch.xc(i).nodes = xc(ptch.xc(i).globalId,:);
+    end
+elseif strcmp(mode,"fitted") 
+    dataX = getPts(geom,N*P,0,C,R,"fitted",0);
+    xc = dataX.nodes;
+    for i = 1:P
+        ptch.xc(i).globalId = find(sqrt(sum((xc - ptch.C(i,:)).^2,2)) <= ptch.R(i));
+        ptch.xc(i).nodes = xc(ptch.xc(i).globalId,:);
+    end
 end
+%
+% Get evaluation points (Y)
+% 
+q = max(q*double(~strcmp(mode,"collocation")),1);
+M = N*P*q;    
+if ~strcmp(mode,"colocation")
+    dataY = getPts(geom,M,0,C,R,"fitted",0);
+    %
+    % Move evaluation points inside (and on the boundary) to the closest center point.
+    % Make sure not to move two evaluation points to the same center point. All
+    % center points should be moved to.
+    %
+    if mvCentres && ~strcmp(mode,"collocation")
+        xcIn = xc([dataX.inner; dataX.bnd],:);
+        xeIn = dataY.nodes([dataY.inner; dataY.bnd],:);
+        i = 1;
+        idY = [1:size(xeIn,1)]'; % All interior evaluation (Y) points
+        idX = [1:size(xcIn,1)]'; % All interior center (X) points
+        %
+        % Ensure the same Y point is not moved twice and obly consider X
+        % points that have not been treated
+        %
+        iXdone = [];             
+        iYdone = [];
+        while length(iXdone) ~= size(xcIn,1) % ensure all interior center points are treated
+            idYmv = knnsearch(xeIn(idY,:),xcIn(idX,:),'k',1);
+            [unIdYmv,iX,~] = unique(idYmv,'first');
+            xeIn(idY(unIdYmv),:) = xcIn(idX(iX),:);
+            iXdone = [iXdone; idX(iX)];
+            iYdone = [iYdone; idY(unIdYmv)];
+            i = i + 1;
+            idY = setdiff(idY,iYdone);
+            idX = setdiff(idX,iXdone);
+        end
+        dataY.nodes([dataY.inner; dataY.bnd],:) = xeIn;
+    end
+    xe = dataY.nodes;
+    for i = 1:P
+        ptch.xe(i).globalId = find(sqrt(sum((xe - ptch.C(i,:)).^2,2)) <= ptch.R(i));
+        ptch.xe(i).nodes = xe(ptch.xe(i).globalId,:);
+    end
+else
+    dataY = dataX;
+    xe = xc;        % Centers
+    ptch.xe = ptch.xc;
+end
+
 %
 % Constructing global RBF-PUM approximation to evaluation and Laplace operators M x N
 %
@@ -62,17 +130,14 @@ for i = 1:P
     E = RBFDiffMat(0,Psi,ptch.xe(i).nodes);
     B = RBFDiffMat(1,Psi,ptch.xe(i).nodes);
     L = RBFDiffMat(1.5,Psi,ptch.xe(i).nodes);
-    
-    Eglobal(ptch.xe(i).globalId,(i-1)*N+1:i*N) = w{i}.f'.*E + Eglobal(ptch.xe(i).globalId,(i-1)*N+1:i*N);
+    Eglobal(ptch.xe(i).globalId,ptch.xc(i).globalId) = w{i}.f'.*E + Eglobal(ptch.xe(i).globalId,ptch.xc(i).globalId);
     for d = 1:dim
-        Lglobal(ptch.xe(i).globalId,(i-1)*N+1:i*N) =  2.*w{i}.grad{d}'.*B{d} + Lglobal(ptch.xe(i).globalId,(i-1)*N+1:i*N);
+        Lglobal(ptch.xe(i).globalId,ptch.xc(i).globalId) =  2.*w{i}.grad{d}'.*B{d} + Lglobal(ptch.xe(i).globalId,ptch.xc(i).globalId);
     end
-    Lglobal(ptch.xe(i).globalId,(i-1)*N+1:i*N) = w{i}.L'.*E + w{i}.f'.*L + Lglobal(ptch.xe(i).globalId,(i-1)*N+1:i*N);
+    Lglobal(ptch.xe(i).globalId,ptch.xc(i).globalId) = w{i}.L'.*E + w{i}.f'.*L + Lglobal(ptch.xe(i).globalId,ptch.xc(i).globalId);
 end
 L = Lglobal(dataY.inner,:);
 B = Eglobal(dataY.bnd,:);
-L = (sum(L~=0,2)./P/N).*L;
-B = (sum(B~=0,2)./P/N).*B;
 %
 % Manufactured solution to construct forcing and BC
 %
@@ -104,7 +169,7 @@ end
 %
 % LS problem scaling
 %
-if scaling && strcmp(mode,"unfitted")
+if scaling && (strcmp(mode,"unfitted") || (strcmp(mode,"fitted") && strcmp(bcMode,"weak")))
     [~,dist] = knnsearch(xc,xc,'K',2);
     h = max(dist(:,2));
     Lscale = sqrt(dataY.Vol/length(dataY.inner));
@@ -114,7 +179,7 @@ if scaling && strcmp(mode,"unfitted")
     F(dataY.bnd) = Bscale.*F(dataY.bnd);
 end
 
-if strcmp(mode,"fitted")
+if strcmp(mode,"fitted") && strcmp(bcMode,"strong")
     Fmod = Lglobal(:,dataX.bnd)*ucExact(dataX.bnd);
     F = F-Fmod;
     L = Lglobal(:,dataX.inner);
@@ -128,7 +193,7 @@ u = A\F;
 %
 % Fix operators to compute error measures
 %
-if strcmp(mode,"fitted")
+if strcmp(mode,"fitted") && strcmp(bcMode,"strong")
     u = [u; ucExact(dataX.bnd)];
 end
 ue = Eglobal*u;
@@ -136,7 +201,16 @@ ue = Eglobal*u;
 % Displaying output 
 %
 if display
-    % Plotting 
+    %
+    % Plotting solution and patches
+    %
+    plotPtch(ptch,geom,C,R)
+    hold on
+    evalPtPlot = plot(xe(:,1),xe(:,2),'b.');
+    centerPtPlot = plot(xc(:,1),xc(:,2),'rx');
+    legend([evalPtPlot centerPtPlot],'Evaluation points','Center points','FontSize',18,'Interpreter','latex');
+
+    
     plotSolution(ue,uExact,xe,dataY.bnd,dim,geom);
     %
     % Operator and solution l2 errors
@@ -151,7 +225,7 @@ if display
     disp(['Laplace Op error = ', num2str(laplaceError)]);
 end
 %
-% Plotting routines
+% Solution and error plotting routines
 %
 function [] = plotSolution(uNumeric,uAnalytic,x,idB,dim,geom)
     error = uNumeric-uAnalytic;
@@ -278,9 +352,37 @@ function [] = plotSolution(uNumeric,uAnalytic,x,idB,dim,geom)
     end
 end
 %
+% Patch plotting routine
+%
+function [] = plotPtch(ptch,geom,C,R)
+    theta = linspace(0,2*pi,100)';
+    dim = size(C,2);
+    figure()
+    hold on
+    for i = 1:size(ptch.C,1)
+        plot(ptch.C(i,1),ptch.C(i,2),'ro');
+        x = ptch.C(i,:) + [ptch.R(i)*cos(theta), ptch.R(i)*sin(theta)];
+        plot(x(:,1),x(:,2),'k-')
+    end
+    axis equal
+    if strcmp(geom,"cube")
+        dimLCoeff = [1 sqrt(2)/2 sqrt(3)/3];   
+        a = dimLCoeff(dim)*R;
+        x = [C + [a a]; ...
+             C + [a -a]; ...
+             C + [-a -a]; ...
+             C + [-a a]; ...
+             C + [a a]];
+        plot(x(:,1),x(:,2),'k-');
+    elseif strcmp(geom,"ball")
+        theta = linspace(0,2*pi,1000);
+        plot(R.*cos(theta),R.*sin(theta),'k-')
+    end
+end
+%
 % Point generation routine
 %
-function [data] = getPts(geom,N,n,C,R,mode,extCoeff)
+function data = getPts(geom,N,n,C,R,mode,extCoeff)
     dim = size(C,2);
     if strcmp(geom,'ball')
         dimRat = [1 1.2*4/pi 1.2*8/(4*pi/3)];       % Ratios between rectangle/circle, cube/sphere area and volume
@@ -389,27 +491,27 @@ function [data] = getPts(geom,N,n,C,R,mode,extCoeff)
     end
 end
 %
-% Patch plotting routine
+% Patch generation routine
 %
-function [] = plotPtch(ptch,geom,C,R)
-    theta = linspace(0,2*pi,100)';
+function ptch = getPtch(geom,P,C,R,del)
     dim = size(C,2);
-    figure()    
-    hold on
-    for i = 1:size(ptch.C,1)
-        plot(ptch.C(i,1),ptch.C(i,2),'ro');
-        x = ptch.C(i,:) + [ptch.R(i)*cos(theta), ptch.R(i)*sin(theta)];
-        plot(x(:,1),x(:,2),'k-')
+    if strcmp(geom,"ball")
+        dimRat = [1 4/pi 8/(4*pi/3)];
+        P = ceil(dimRat(dim)*P);
+        Rsq = R*(dim)^(1/2);
+    elseif strcmp(geom,"cube")
+        Rsq = R;
     end
-    axis equal
-    if strcmp(geom,"cube")
-        dimLCoeff = [1 sqrt(2)/2 sqrt(3)/3];   
-        a = dimLCoeff(dim)*R;
-        x = [C + [a a]; ...
-             C + [a -a]; ...
-             C + [-a -a]; ...
-             C + [-a a]; ...
-             C + [a a]];
-        plot(x(:,1),x(:,2),'k-');
+    
+    ptch.R = (2*Rsq)/((2-del)*ceil(P^(1/dim)) - del); % Ensure overlap in cartesian domain (Along diagonal)
+    Cx = linspace(-1+(sqrt(2)/2)*(1-del)*ptch.R,1-(sqrt(2)/2)*(1-del)*ptch.R,ceil(P^(1/dim)));
+    Cy = linspace(-1+(sqrt(2)/2)*(1-del)*ptch.R,1-(sqrt(2)/2)*(1-del)*ptch.R,ceil(P^(1/dim)));
+    [Cx,Cy] = meshgrid(Cx,Cy);
+    ptch.C = [Cx(:),Cy(:)];
+    ptch.R = ptch.R*ones(size(ptch.C,1),1);
+    if strcmp(geom,"ball")
+        idBall = find(sum((ptch.C - C).^2,2)<=(R+(0.5-del).*ptch.R).^2);
+        ptch.C = ptch.C(idBall,:);
+        ptch.R = ptch.R(idBall,:);
     end
 end
