@@ -19,24 +19,30 @@ jend = jvec(end); % The last odd index
 %
 % Divide r into small and large values
 %
+Rl = zeros(0,length(jvec));
+Rs = zeros(0,length(jvec));
 isSmall = (abs(r)<=breakpt);
 psmall = find(isSmall);
 plarge = find(~isSmall);
 %
 % Use direct evaluation for large values
 %
-Rl = (T(plarge,jvec+1)-r(plarge).*dT(plarge,jvec+1)).*(1./r2(plarge)); 
+if ~isempty(plarge)
+    Rl = (T(plarge,jvec+1)-r(plarge).*dT(plarge,jvec+1)).*(1./r2(plarge));
+end    
 %
 % Use a recursive Horner-like scheme for small values
 %
 x = r(psmall); x2 = r2(psmall);
 nterm = min(nmax,jend); % Must be an odd number
 %
-Rs = (nterm-1)/factorial(nterm); 
-for k=nterm-2:-2:1
-    Rs = -Rs.*(x.^2*(jvec.^2-k^2)) + (k-1)/factorial(k);  
+if ~isempty(psmall)
+    Rs = (nterm-1)/factorial(nterm); 
+    for k=nterm-2:-2:1
+        Rs = -Rs.*(x.^2*(jvec.^2-k^2)) + (k-1)/factorial(k);  
+    end
+    Rs = Rs.*(1./x*(jvec.*(-1).^jhalf)); % Alternating signs
 end
-Rs = Rs.*(1./x*(jvec.*(-1).^jhalf)); % Alternating signs
 %
 % Assign to desired global indices
 %

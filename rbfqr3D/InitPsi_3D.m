@@ -7,43 +7,67 @@ function [Psi,Rt]=InitPsi_3D(ep,xk)
 N = size(xk,1);
 mp = eps; % machine precision
 tol = 1e4*mp;
+tolqr = 2;
 %--- Find out how many columns are needed at the least to include N
 jN = degree(N,3);
-jmax = max_columns(ep,jN);
 
 % Figure out what indices we need for the 3D-case. We order the
 % functions as j first then m, then nu. I think there may be many
 % zeros, but this is something we can perhaps gradually improve as
 % it goes.
-[Psi,C,T] = AddCBlocks([],[],[],ep,xk,jmax);
+[Psi,C,T] = AddCBlocks([],[],[],ep,xk,jN);
 M = length(Psi.j);
 %--- QR-factorize the coefficient matrix and compute \tilde{R}
-R = zeros(N,M); columns(1)=1; lindep=zeros(0,1); q=2;
-[Q,R(:,1)] = qr(C(:,1));
-for p=2:M
-    [Q,R(:,1:q)]=qrupdate(Q,R(:,1:q),C(:,p),[zeros(q-1,1); 1]);
-    %     if q<=N, disp([num2str(abs(R(q,q))) '>=' num2str(tol) '?']); end
-    if q<=N && abs(R(q,q))<tol
-        lindep = [lindep; p];
-        R(:,q)=0;
-        %       R(:,q) = [];
-    else
-        columns(q,1) = p;
-        q = q+1;
-    end
+%--- incrementally block by block, until we find a block that is
+%--- insignificant in absolute value compared to the previous ones.
+[Q,R]=IncQR(C,ep^2,Psi.j,tolqr);
+
+true = 1;
+q = Q.q;
+posN = -1;
+jmax = jN;
+%R = zeros(N,M); columns(1)=1; lindep=zeros(0,1); q=2;
+%[Q,R(:,1)] = qr(C(:,1));
+%for p=2:M
+while true
+    %--- Add one block to C
+    jmax = jmax+1;
+    [Psi,C,T,Cnew] = AddCBlocks(Psi,C,T,ep,xk,jmax);
+
+    %--- If we have less than N columns, then we cannot be done
+    if (q > N)
+        if (posN<0) % First time, find out location to compare with
+	    jN = Psi.j(R.order(N));
+	    pos = find(Psi.j==jN);
+	    posN = pos(1); % The location of d_j,0
+        end
+      
+        %--- Check the magnitude of the latest block. 
+        jtest = Psi.j(end);
+        pos = find(Psi.j==jtest);
+        pos = pos(1);
+        p1 = [1 posN]; % First and Nth, either one may be smallest
+        p2 = [pos];
+        relsc = EvalD_3D(ep,p1,p2,Psi.j,Psi.m,Psi.p);
+        relsc = max(relsc);
+
+        %--- Block small enough means we are done.
+        if (relsc*exp(0.223*jtest-0.012-0.649*mod(jtest,2)) < mp)
+	    break
+        end
+    end  
+    %--- Update the QR-factorization with the new block
+    pos = find(Psi.j==Psi.j(end));
+    [Q,R]=IncQR(Cnew,ep^2,Psi.j(pos),tolqr,Q,R);
+    q = Q.q;
 end
-if (q<=N)
-    error('Not enough columns due to non-unisolvency')
-end
-columns = [columns(1:N); lindep; columns(N+1:end)];
-M = length(columns); % Necessary?
+    
 
-R=[R(:,1:N) Q'*C(:,lindep) R(:,N+1:q-1)];
-Rt = R(1:N,1:N)\R(1:N,N+1:M);
+M = length(R.order);
+Rt = R.R(1:N,1:N)\R.R(1:N,N+1:M);
 
-p1 = columns(1:N);
-p2 = columns((N+1):M);
-
+p1 = R.order(1:N);    p2 = R.order((N+1):M);
+ 
 if (M>N)
     D = EvalD_3D(ep,p1,p2,Psi.j,Psi.m,Psi.p);
     Rt = D.*Rt;
@@ -51,7 +75,7 @@ end
 Psi.ep = ep;
 Psi.xk = xk;
 Psi.Rt = Rt;
-Psi.columns = columns;
+Psi.columns = R.order;
 
 
 function [Psi,C,T,C1] = AddCBlocks(Psi,C,T,ep,xk,jmax)
@@ -137,64 +161,5 @@ Psi.p = [Psi.p; p];
 Psi.nu = [Psi.nu; nu];
 C = [C C1];
 
-function jmax = max_columns(ep,jN)
-mp = eps;
-% Compute the maximum number of columns needed
-jmax = 1;  fac = ep^2/6; ratio = fac*(jmax+1);
-while (jmax<jN & ratio > 1) % See if d_00 is smaller than d_j0
-    jmax = jmax + 1;
-    fac = fac*ep^2;
-    if (mod(jmax,2)==0)
-        ratio = fac;
-    else
-        fac = fac/(jmax+1)/(jmax+2);
-        ratio = fac*(jmax+1);
-    end
-end
-%
-% d_00 was not the smallest, so we can compare with jN
-%
-if (ratio < 1)
-    % Adjust fac so that we start with computing the ratio testing jN+1
-    jmax = jN;  fac = 1;
-    if (mod(jN,2)==1)
-        fac = fac/(jN+1);
-    end
-end
-%
-% Compute the ratio for checking jN+1
-%
-fac = fac*ep^2;
-if (mod(jmax+1,2)==1)
-    fac = fac/(jmax+2)/(jmax+3);
-    ratio = fac*(jmax+2);
-end
 
-while (ratio*exp(0.223*(jmax+1)-0.012-0.649*mod(jmax+1,2)) > mp)
-    jmax = jmax + 1;
-    fac = fac*ep^2;
-    if (mod(jmax+1,2)==1)
-        fac = fac/(jmax+2)/(jmax+3);
-        ratio = fac*(jmax+2);
-    else
-        ratio = fac;
-    end
-end
 
-function K=degree(N,n)
-%
-% Find the polynomial degree that N basis functions correspond to in n
-% dimensions
-%
-for k=0:N-1 % K(N) cannot be larger than N-1 (1D-case)
-    if (dim(k,n) >= N)
-        K=k;
-        break
-    end
-end
-
-function N=dim(K,n)
-%
-% Find the dimension of the polynomial space of degree K in n dimensions
-%
-N = prod([(K+1):(K+n)]./[1:n]);

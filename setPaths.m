@@ -4,3 +4,4 @@ addpath rbfqr2D
 addpath rbfqr3D
 addpath utils
 addpath tests
+addpath examples

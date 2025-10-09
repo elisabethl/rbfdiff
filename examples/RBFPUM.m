@@ -5,17 +5,17 @@ setPaths;
 % An RBF-FD example for solving the Poisson equation. Collocation and LS
 % unfitted or fitted methods.
 %
-dim = 2;                            % dim = 1,2 or 3
+dim = 3;                            % dim = 1,2 or 3
 display = 1;                        % Plot solution
-geom = 'ball';                      % ball or cube
+geom = 'cube';                      % ball or cube
 mode = 'unfitted';                  % fitted, unfitted or collocation
 bcMode = 'weak';                    % strong or weak imposition of boundary conditions (only relevant for fitted)
 scaling = 1;                        % Include scaling of the unfitted LS problem
 mvCentres = 1;                      % Option to have a Y point on top of all X points inside the domain
 q = 2;                              % Oversampling
-N = 28;                             % Number of center points (X) in each patch
-P = 16;                             % Number of patches
-ep = 0.01;                          % Not relevant for 'r3' basis
+N = 120;                             % Number of center points (X) in each patch
+P = 27;                             % Number of patches
+ep = 0.1;                          % Not relevant for 'r3' basis
 phi = 'rbfqr';                      % Choice of basis 'r3', 'mq', 'gs', 'iq', 'rbfqr'
 psi = 'wendland_c2';                % Weight function: wendland_c2 or bump
 pdeg = -1;                          % Polynomial extension, not relevant for 'rbfqr'
@@ -36,6 +36,7 @@ end
 % Get patches  
 %
 ptch = getPtch(geom,P,C,R,del);
+plotPtch(ptch,geom,C,R);
 P = length(ptch.R);
 %
 % Get center points (X)
@@ -70,6 +71,7 @@ elseif strcmp(mode,"fitted")
     for i = 1:P
         ptch.xc(i).globalId = find(sqrt(sum((xc - ptch.C(i,:)).^2,2)) <= ptch.R(i));
         ptch.xc(i).nodes = xc(ptch.xc(i).globalId,:);
+        ptch.xc(i)
     end
 end
 %

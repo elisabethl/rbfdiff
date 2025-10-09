@@ -95,7 +95,7 @@ function [Psi,C,T] = AddCBlocks(ep,xk,jmax,Psi,T)
 %--- Local indices to compute for in this call
   j = zeros(0,1); m=zeros(0,1); p=zeros(0,1); odd=mod(j0+1,2);
   for k=j0:jmax
-    odd = abs(odd-1);
+    odd = 1-odd;
     p = [p; odd*ones(k+1,1)]; 	
     j = [j; k*ones(k+1,1)];
     q(1:2:k+1,1) = (0:(k-odd)/2)';
