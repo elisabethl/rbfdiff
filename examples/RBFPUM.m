@@ -8,12 +8,12 @@ setPaths;
 dim = 3;                            % dim = 1,2 or 3
 display = 1;                        % Plot solution
 geom = 'cube';                      % ball or cube
-mode = 'unfitted';                  % fitted, unfitted or collocation
+mode = 'fitted';                  % fitted, unfitted or collocation
 bcMode = 'weak';                    % strong or weak imposition of boundary conditions (only relevant for fitted)
 scaling = 1;                        % Include scaling of the unfitted LS problem
 mvCentres = 1;                      % Option to have a Y point on top of all X points inside the domain
 q = 2;                              % Oversampling
-N = 120;                             % Number of center points (X) in each patch
+N = 35;                             % Number of center points (X) in each patch
 P = 27;                             % Number of patches
 ep = 0.1;                          % Not relevant for 'r3' basis
 phi = 'rbfqr';                      % Choice of basis 'r3', 'mq', 'gs', 'iq', 'rbfqr'
@@ -71,7 +71,6 @@ elseif strcmp(mode,"fitted")
     for i = 1:P
         ptch.xc(i).globalId = find(sqrt(sum((xc - ptch.C(i,:)).^2,2)) <= ptch.R(i));
         ptch.xc(i).nodes = xc(ptch.xc(i).globalId,:);
-        ptch.xc(i)
     end
 end
 %
@@ -79,7 +78,7 @@ end
 % 
 q = max(q*double(~strcmp(mode,"collocation")),1);
 M = N*P*q;    
-if ~strcmp(mode,"colocation")
+if ~strcmp(mode,"collocation")
     dataY = getPts(geom,M,0,C,R,"fitted",0);
     %
     % Move evaluation points inside (and on the boundary) to the closest center point.
@@ -170,6 +169,8 @@ end
 % Solution on centre points, evaluated on Y set
 %
 A = [L; B];
+Ltest = rank(full(L))
+Btest = rank(full(B))
 u = A\F;
 %
 % Fix operators to compute error measures
@@ -460,6 +461,8 @@ function data = getPts(geom,N,n,C,R,mode,extCoeff)
         pos = find(r2<=(R+n^(1/dim)*h*extCoeff));
         pos = pos(1:N-Nb);
         x = x(pos,:) + C;
+        [~,ii] = sort(sum(x,2));
+        x = x(ii,:);
         %
         % Organize outputs including labels for points inside, outside and on the boundary
         %
