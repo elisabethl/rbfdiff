@@ -64,30 +64,30 @@ else
         rr = varargin{2};
     elseif (narg==1)
         xe = varargin{1};
-        cc = mean(xe);
+        %cc = mean(xe);
+        cc = mean(xc); % The centers define the domain. Even for a stencil.
         xe = xe - cc;
         re = sqrt(sum(xe.^2,2));
         rr = max(re);
     end
-    xc = xc - cc;
-    rc = sqrt(sum(xc.^2,2));
+    xloc = xc - cc; % xloc are the local shifted and scaled centers
+    rc = sqrt(sum(xloc.^2,2));
     rr = max(max(rc),rr);
     Psi.rr = rr;
     Psi.cc = cc;
 
-    xc = xc./rr; 
+    xloc = xloc./rr;
     ep = ep*rr;
     %
     % RBF-Direct. Compute distance matrix
     %
-    rc = xcdist(xc);
+    rc = xcdist(xloc);
     A = RBFmat(phi,ep,rc,'0');
-
     if (pdeg>=0)
         %
         % Add polynomial terms
         %
-        P = polyMat(xc,pdeg);
+        P = polyMat(xloc,pdeg);
         np = size(P,2);
         A = [A P;P' zeros(np)];
     end
@@ -96,6 +96,7 @@ else
     Psi.phi = phi;
     Psi.pdeg = pdeg;
     Psi.xc = xc;
+    Psi.xloc = xloc;
     %
     % Factorize A. A(piv,:) = L*U, piv is a permutation vector. 
     % Cholesky A = L'*L; can be used for pos. def. matrices.
@@ -103,3 +104,4 @@ else
     %
     [Psi.L,Psi.U,Psi.piv] = lu(A,'vector');
 end
+

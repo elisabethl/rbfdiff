@@ -43,7 +43,8 @@ R0 = Q.Q'*newC;
 if (Q.q <= N) 
   
   % --- Remove the Q-component from all columns
-  newC = newC - Q.Q*(Q.Q'*newC);
+  %newC = newC - Q.Q*(Q.Q'*newC);
+  newC = newC - Q.Q*(R0);
   
   % --- Work block by block through the matrix (assuming ordered)
   for j=bj(1):bj(end)
