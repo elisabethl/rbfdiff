@@ -5,16 +5,16 @@ setPaths;
 % An RBF-FD example for solving the Poisson equation. Collocation and LS
 % unfitted or fitted methods.
 %
-dim = 3;                            % dim = 1,2 or 3
+dim = 2;                            % dim = 1,2 or 3
 display = 1;                        % Plot solution
-geom = 'cube';                      % ball or cube
+geom = 'ball';                      % ball or cube
 mode = 'unfitted';                  % fitted, unfitted or collocation
 bcMode = 'weak';                    % strong or weak imposition of boundary conditions (only relevant for fitted)
 scaling = 1;                        % Include scaling of the unfitted LS problem
 mvCentres = 1;                      % Option to have a Y point on top of all X points inside the domain
 q = 2;                              % Oversampling
-N = 120;                             % Number of center points (X) in each patch
-P = 27;                             % Number of patches
+N = 10;                             % Number of center points (X) in each patch
+P = 9;                             % Number of patches
 ep = 0.1;                          % Not relevant for 'r3' basis
 phi = 'rbfqr';                      % Choice of basis 'r3', 'mq', 'gs', 'iq', 'rbfqr'
 psi = 'wendland_c2';                % Weight function: wendland_c2 or bump
