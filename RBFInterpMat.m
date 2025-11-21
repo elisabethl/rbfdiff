@@ -95,7 +95,6 @@ else
     Psi.ep = ep;
     Psi.phi = phi;
     Psi.pdeg = pdeg;
-    Psi.xc = xc;
     Psi.xloc = xloc;
     %
     % Factorize A. A(piv,:) = L*U, piv is a permutation vector. 
@@ -104,4 +103,5 @@ else
     %
     [Psi.L,Psi.U,Psi.piv] = lu(A,'vector');
 end
+Psi.xc = xc;
 
