@@ -53,7 +53,7 @@ function [B,Te] = RBFDiffMat(ndiff,Psi,xTe)
 if strcmp(Psi.phi,'rbfqr')
     dim = size(Psi.xk,2);
     if (dim==1)
-        [B,Te] = RBF_QR_diffmat_1D(ndiff,Psi,xTe)
+        [B,Te] = RBF_QR_diffmat_1D(ndiff,Psi,xTe);
     elseif (dim==2)
         [B,Te] = RBF_QR_diffmat_2D(ndiff,Psi,xTe);
     elseif (dim==3)

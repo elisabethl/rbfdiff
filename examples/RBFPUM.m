@@ -5,15 +5,15 @@ setPaths;
 % An RBF-FD example for solving the Poisson equation. Collocation and LS
 % unfitted or fitted methods.
 %
-dim = 2;                            % dim = 1,2 or 3
+dim = 3;                            % dim = 1,2 or 3
 display = 1;                        % Plot solution
 geom = 'cube';                      % ball or cube
-mode = 'fitted';                    % fitted, unfitted or collocation
+mode = 'unfitted';                    % fitted, unfitted or collocation
 bcMode = 'weak';                    % strong or weak imposition of boundary conditions (only relevant for fitted)
 scaling = 1;                        % Include scaling of the unfitted LS problem
 mvCentres = 1;                      % Option to have a Y point on top of all X points inside the domain
 q = 2;                              % Oversampling
-N = 35;                             % Number of center points (X) in each patch
+N = 56;                             % Number of center points (X) in each patch
 P = 27;                             % Number of patches
 
 ep = 0.1;                           % Not relevant for 'r3' basis
@@ -171,8 +171,8 @@ end
 % Solution on centre points, evaluated on Y set
 %
 A = [L; B];
-Ltest = rank(full(L))
-Btest = rank(full(B))
+% Ltest = rank(full(L))
+% Btest = rank(full(B))
 u = A\F;
 %
 % Fix operators to compute error measures
@@ -404,7 +404,7 @@ function [] = plotPtch(ptch,geom,C,R)
                  C + [a a a]];
             x = [x; [x(:,1), x(:,2), x(:,3)-2*a]];
             plot3(x(:,1),x(:,2),x(:,3),'k-','LineWidth',2);
-            for i = 1:size(x)/2
+            for i = 1:size(x,1)/2
                 xPlot = [x(i,:); x(i+size(x,1)/2,:)];
                 plot3(xPlot(:,1),xPlot(:,2),xPlot(:,3),'k-','LineWidth',2);
             end
@@ -508,7 +508,7 @@ function data = getPts(geom,N,n,C,R,mode,extCoeff)
                 xB = [xB; [1,1,-1].*xB];
                 Ry = eye(dim); Ry(1,1) = cos(pi/2); Ry(dim,dim) = cos(pi/2); Ry(dim,1) = -sin(pi/2); Ry(1,dim) = sin(pi/2); % Rotate 90 degrees along y-axis
                 xB = [xB; (Ry*xB')'];
-                xB = unique(xB,'rows');
+                xB = uniquetol(xB,1e-14,'ByRows',true);
                 NbE = size(xB,1);
                 Rx = eye(dim); Rx(dim-1,dim-1) = cos(pi/2); Rx(dim,dim) = cos(pi/2); Rx(dim-1,dim) = -sin(pi/2); Rx(dim,dim-1) = sin(pi/2); % Rotate 90 degrees
                 xBF = [2*(dimLCoeff(dim)*R)*(halton(NbF,dim-1)-0.5), ones(NbF,1)*XYZLim(1)];
