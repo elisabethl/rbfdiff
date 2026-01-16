@@ -5,7 +5,7 @@ setPaths;
 % An RBF-FD example for solving the Poisson equation. Collocation and LS
 % unfitted or fitted methods.
 %
-dim = 3;                            % dim = 1,2 or 3
+dim = 2;                            % dim = 1,2 or 3
 display = 1;                        % Plot solution
 geom = 'ball';                      % ball or cube
 mode = 'unfitted';                    % fitted, unfitted or collocation
@@ -568,53 +568,48 @@ function ptch = getPtch(geom,P,C,R,del)
     end
     ptch.R = ptch.R*ones(size(ptch.C,1),1);
     if strcmp(geom,"ball")
-        % if dim == 2
-            tol = 1e-6;
-            % Get closest patch neighbours based on distance
-            [idNei,distNei] = rangesearch(ptch.C,ptch.C,(2*ptch.R(1)-ptch.R(1)*del) + ptch.R(1)*tol);
-            % Find points of intersection between patches
-            edgePts = [];
-            for i = 1:size(idNei,1)
-                neiTemp = idNei{i};
-                distTemp = distNei{i};
-                ptchComb = [nchoosek(neiTemp(2:end),2^(dim-1) - 1)];
-                ptchComb = [ones(size(ptchComb,1),1).*neiTemp(1), ptchComb];
-                for j = 1:size(ptchComb,1)
-                    midPt = sum(ptch.C(ptchComb(j,:),:),1)/size(ptchComb,2);
-                    tempDir = (ptch.C(ptchComb(j,2:end),:) - ptch.C(ptchComb(j,1),:))./sqrt(sum((ptch.C(ptchComb(j,2:end),:) - ptch.C(ptchComb(j,1),:)).^2,2));
-                    if dim == 2
-                        t = (-ptch.C(neiTemp(1),:) + ptch.C(neiTemp(j+1),:))/norm((-ptch.C(neiTemp(1),:) + ptch.C(neiTemp(j+1),:)),2);
-                        t = [t(2), -t(1)];
-                        t2 = -t;
-                        keep = 1;
-                    else
-                        t = cross(tempDir(1,:),tempDir(2,:));
-                        keep = ~dot(t,tempDir(end,:));
-                        t2 = cross(tempDir(1,:),-tempDir(2,:));
-                    end
-                    if keep
-                        if distTemp(j+1) < (2*ptch.R(1) - del*ptch.R(1)) - tol*ptch.R(1)
-                            edgePts = [edgePts; ptch.R(1)*sin(acos((sqrt(2)/4)*(2-del)))*(t) + midPt];
-                            edgePts = [edgePts; ptch.R(1)*sin(acos((sqrt(2)/4)*(2-del)))*(t2) + midPt];
-                        else
-                            edgePts = [edgePts; ptch.R(1)*sin(acos(1-del/2))*(t) + midPt];
-                            edgePts = [edgePts; ptch.R(1)*sin(acos(1-del/2))*(t2) + midPt];
-                        end                        
-                    end                    
+        tol = 1e-6;
+        % Get closest patch neighbours based on distance
+        [idNei,distNei] = rangesearch(ptch.C,ptch.C,(2*ptch.R(1)-ptch.R(1)*del) + ptch.R(1)*tol);
+        % Find points of intersection between patches (2 patches in 2D and 4 in 3D)
+        edgePts = [];
+        for i = 1:size(idNei,1)
+            neiTemp = idNei{i};
+            distTemp = distNei{i};
+            % All possible patch combinations in neighbourhood, groups of 2 in 2D and 4 in 3D.
+            ptchComb = [nchoosek(neiTemp(2:end),2^(dim-1) - 1)];
+            ptchComb = [ones(size(ptchComb,1),1).*neiTemp(1), ptchComb];
+            for j = 1:size(ptchComb,1)
+                midPt = sum(ptch.C(ptchComb(j,:),:),1)/size(ptchComb,2);
+                tempDist = sqrt(sum((ptch.C(ptchComb(j,2:end),:) - ptch.C(ptchComb(j,1),:)).^2,2));
+                tempDir = (ptch.C(ptchComb(j,2:end),:) - ptch.C(ptchComb(j,1),:))./tempDist;
+                % Computing directions along which the edge point lies (starting from midPt)
+                if dim == 2
+                    t = (-ptch.C(neiTemp(1),:) + ptch.C(neiTemp(j+1),:))/norm((-ptch.C(neiTemp(1),:) + ptch.C(neiTemp(j+1),:)),2);
+                    t = [t(2), -t(1)];
+                    t2 = -t;
+                    keep = 1;
+                else
+                    t = cross(tempDir(1,:),tempDir(2,:));
+                    keep = ~dot(t,tempDir(end,:));
+                    t2 = cross(tempDir(1,:),-tempDir(2,:));
                 end
+                if keep % In 3D some combinations of patch centres do not form a plane
+                    tempL = sqrt((ptch.R(1)^2)-(max(tempDist)/2)^2);
+                    edgePts = [edgePts; tempL*t + midPt];
+                    edgePts = [edgePts; tempL*t2 + midPt];                     
+                end                    
             end
-            edgePts= uniquetol(edgePts,tol,'ByRows',true);
-            % Make sure that points of intersection that are close to or inside
-            % the domain are fully covered. This guarantees no part of the
-            % boundary is left uncovered.
-            idEdgeIn = find(sum((edgePts - C).^2,2)<=(R+del.*ptch.R(1)).^2);
-            for i = 1:length(edgePts)
-                ptPtchList(i,:) = sqrt(sum((edgePts(i,:) - ptch.C).^2,2)) < ptch.R - ptch.R.*tol;
-            end
-            idBall = find(sum(ptPtchList(idEdgeIn,:),1));
-        % else
-        %     idBall = find(sum((ptch.C - C).^2,2)<=(R+del.*ptch.R(1)).^2);
-        % end
+        end
+        edgePts= uniquetol(edgePts,tol,'ByRows',true);
+        % Make sure that points of intersection that are close to or inside
+        % the domain are fully covered. This guarantees no part of the
+        % boundary is left uncovered.
+        idEdgeIn = find(sum((edgePts - C).^2,2)<=(R+del.*ptch.R(1)).^2);
+        for i = 1:length(edgePts)
+            ptPtchList(i,:) = sqrt(sum((edgePts(i,:) - ptch.C).^2,2)) < ptch.R - ptch.R.*tol;
+        end
+        idBall = find(sum(ptPtchList(idEdgeIn,:),1));
         ptch.C = ptch.C(idBall,:);
         ptch.R = ptch.R(idBall,:);
     end
