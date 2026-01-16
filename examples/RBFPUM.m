@@ -13,8 +13,8 @@ bcMode = 'weak';                    % strong or weak imposition of boundary cond
 scaling = 1;                        % Include scaling of the unfitted LS problem
 mvCentres = 1;                      % Option to have a Y point on top of all X points inside the domain
 q = 2;                              % Oversampling
-N = 20;                             % Number of center points (X) in each patch
-P = 48;                             % Number of patches
+N = 6;                             % Number of center points (X) in each patch
+P = 25;                             % Number of patches
 
 ep = 0.1;                           % Not relevant for 'r3' basis
 phi = 'rbfqr';                      % Choice of basis 'r3', 'mq', 'gs', 'iq', 'rbfqr'
@@ -79,7 +79,7 @@ end
 % Get evaluation points (Y)
 % 
 q = max(q*double(~strcmp(mode,"collocation")),1);
-M = N*P*q;    
+M = ceil(N*P*q);  
 if ~strcmp(mode,"collocation")
     dataY = getPts(geom,M,0,C,R,"fitted",0);
     %
@@ -606,10 +606,16 @@ function ptch = getPtch(geom,P,C,R,del)
         % the domain are fully covered. This guarantees no part of the
         % boundary is left uncovered.
         idEdgeIn = find(sum((edgePts - C).^2,2)<=(R+del.*ptch.R(1)).^2);
-        for i = 1:length(edgePts)
-            ptPtchList(i,:) = sqrt(sum((edgePts(i,:) - ptch.C).^2,2)) < ptch.R - ptch.R.*tol;
+        edgePtsIn = edgePts(idEdgeIn,:);
+        [~,ptchOrder] = sort(sum((ptch.C - C).^2,2),'ascend');
+        idBall = [];
+        for i = 1:size(edgePtsIn,1)
+            ptPtchList = sqrt(sum((edgePtsIn(i,:) - ptch.C(ptchOrder,:)).^2,2)) < ptch.R(ptchOrder) - ptch.R(ptchOrder).*tol;
+            idCand = find(ptPtchList);
+            idBall = [idBall ptchOrder(idCand(1))];
         end
-        idBall = find(sum(ptPtchList(idEdgeIn,:),1));
+        % idBall = find(sum(ptPtchList(idEdgeIn,:),1));
+        idBall = unique(idBall);
         ptch.C = ptch.C(idBall,:);
         ptch.R = ptch.R(idBall,:);
     end
