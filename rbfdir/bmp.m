@@ -43,8 +43,10 @@ r = (1/rho)*r;
 
 % Make sure every value for r >= 1 becomes zero
 r0 = sq(r(:,:,1));
-tmpPw = (1./(1-r0.^2)).*(r0<1); % To avoid Inf at r==1 
-tmp =   exp(-tmpPw).*(r0<1);    % To put zero at r=1 and outside
+rIsIn = (r0<1);
+r0 = r0.*rIsIn; % Make r = zero from 1 and out
+tmpPw = (1./(1-r0.^2)).*rIsIn; % This result also needs to be zero outside 
+tmp =   exp(-tmpPw).*rIsIn;    % To put zero at r=1 and outside
 
 % Precompute derivatives up to the order we need
 switch nprime
