@@ -24,13 +24,14 @@ if (nprime(1)=='L')
   end
 end
 %
-% For the mixed derivative, the dimensions must be given even in 2D
+% For the mixed derivative, the dimensions must be given for all d
 %
 if (nprime(1)=='m')
-  if (length(dim)~=2)
-    error('For the mixed derivative, dim=dim(1:2)')
-  elseif (dim(1)==dim(2))
-    error('For mixed derivatives, dim(1) must be other than dim(2)')
+  p = str2num(nprime(2));
+  if (length(dim)~=p)
+    error('For the mixed derivative mp, dim=dim(1:p)')
+  elseif (all(dim==dim(1)))
+    error('For mixed derivatives, dim(:) cannot have only one value')
   end  
 end
 

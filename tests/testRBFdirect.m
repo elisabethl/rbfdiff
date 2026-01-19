@@ -4,9 +4,9 @@ setPaths
 %
 % Testing the RBFmat implementation
 %
-phi = {'r3','rbfqr','mq','gs'};
-pdeg = [3 -1 3 2];
-dim = 3; % For 1D: 8, 2D: 28, 3D: 56
+phi = {'phs','w2','bmp','rbfqr','mq','gs','iq'};
+pdeg = [3 -1 -1 -1 3 2 1]; % One number for each basis
+dim = 2; % For 1D: 8, 2D: 28, 3D: 56
 if dim == 1
     N = 8;
 elseif dim == 2
@@ -16,7 +16,7 @@ else
 end
 Ne = N*4; % Oversampling
 epvec = logspace(-2,0,100);
-fnum = 1; % 1 = constant, 2 = sin(pi*x*y*z)
+fnum = 2; % 1 = constant, 2 = sin(pi*x*y*z)
 
 syms x y z
 X = [x;y;z];
@@ -94,10 +94,19 @@ end
 for j=1:length(epvec)
     ep = epvec(j);
     for k=1:length(phi)
+      phi{k}
         %
         % Initialize the approximation
         %
-        Psi = RBFInterpMat(phi{k},pdeg(k),ep,xc,shift,R);
+	if strcmp(phi{k},'phs')
+	  order = 3; % The order
+	  Psi = RBFInterpMat(phi{k},pdeg(k),order,xc,shift,R);
+	elseif strcmp(phi{k},'w2') | strcmp(phi,'bmp')
+	  rho = R; % Support radius, rather wide
+	  Psi = RBFInterpMat(phi{k},pdeg(k),rho,xc,shift,R);
+	else
+          Psi = RBFInterpMat(phi{k},pdeg(k),ep,xc,shift,R);
+	end  
         %
         % Compute all differentiation matrices
         %

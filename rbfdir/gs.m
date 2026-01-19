@@ -27,10 +27,11 @@ end
 % For the mixed derivative, the dimensions must be given even in 2D
 %
 if (nprime(1)=='m')
-  if (length(dim)~=2)
-    error('For the mixed derivative, dim=dim(1:2)')
-  elseif (dim(1)==dim(2))
-    error('For mixed derivatives, dim(1) must be other than dim(2)')
+  p = str2num(nprime(2));   
+  if (length(dim)~=p)
+    error('For the mixed derivative mp, dim=dim(1:p)')
+  elseif (all(dim==dim(1)))
+    error('For mixed derivatives, dim(:) cannot have only one value')
   end  
 end
 %
@@ -77,7 +78,66 @@ elseif nprime(1:2)=='L2'
 
 elseif nprime(1:2)=='m2'
   phi = 4*epsil.^4.*sq(r(:,:,dim(1)+1)).*sq(r(:,:,dim(2)+1)).*tmp; 
-  
+
+elseif nprime(1:2)=='m3'
+  ndim = length(unique(dim));
+  if ndim==2 % dx_i^2 dx_j
+      dim = sort(dim);
+      if dim(1)==dim(2) % Let d1 be the dimension with a double derivative
+          d1 = dim(1); d2 = dim(3);
+      else
+          d1 = dim(3); d2 = dim(1);
+      end    
+      phi = -8*epsil.^6.*sq(r(:,:,d1+1)).^2.*sq(r(:,:,d2+1)).*tmp + ...
+             4*epsil.^4.*sq(r(:,:,d2+1)).*tmp;
+      
+  elseif ndim==3 % dx_i dx_j dx_k
+      phi = -8*epsil.^6.*sq(r(:,:,dim(1)+1)).*sq(r(:,:,dim(2)+1)).* ...
+            sq(r(:,:,dim(3)+1)).*tmp;
+  else
+      error('Error in input argument dim to function mq')
+  end    
+
+elseif nprime(1:2)=='m4'
+  dim = sort(dim);
+  ndim = length(unique(dim));
+  if ndim==2
+      if dim(1)==dim(2) & dim(3)==dim(4) % Two derivatives on each coordinate
+          phi = 16*epsil.^8.*sq(r(:,:,dim(1)+1)).^2.* ...
+                             sq(r(:,:,dim(3)+1)).^2.*tmp - ...
+                  8*epsil.^6.*(sq(r(:,:,dim(1)+1)).^2 + ...
+                               sq(r(:,:,dim(3)+1)).^2).*tmp +  ...
+                    4*epsil.^4.*tmp;
+          
+      else % The 3-1 case
+          if dim(1)==dim(2)
+              d1 = dim(1); d2 = dim(4);
+          else
+              d1 = dim(2); d2 = dim(1);
+          end
+          phi = 16*epsil.^8.*sq(r(:,:,d1+1)).^3.*sq(r(:,:,d2+1)).*tmp - ...
+                 24*epsil.^6.*sq(r(:,:,d1+1)).*sq(r(:,:,d2+1)).*tmp;
+          
+      end    
+  elseif ndim==3 % One coordinate has two derivatives
+      if dim(1)==dim(2)
+          d1 = dim(1); d2 = dim(3); d3 = dim(4);
+      elseif dim(2)==dim(3)
+          d1 = dim(2); d2 = dim(1); d3 = dim(4);
+      else     
+          d1 = dim(3); d2 = dim(1); d3 = dim(2);
+      end
+      phi = 16*epsil.^8.*sq(r(:,:,d1+1)).^2.*sq(r(:,:,d2+1)).* ...
+                          sq(r(:,:,d3+1)).*tmp -  ...
+              8*epsil.^6.*sq(r(:,:,d2+1)).*sq(r(:,:,d3+1)).*tmp;
+      
+  elseif ndim==4 % All have one derivative
+      phi = 16*epsil.^8.*sq(r(:,:,dim(1)+1)).*sq(r(:,:,dim(2)+1)).* ...
+                          sq(r(:,:,dim(3)+1)).*sq(r(:,:,dim(4)+1)).*tmp;
+  else
+      error('Error in input argument dim to function mq')
+  end    
+    
 else
   error('Error in input argument nprime to function gauss')
 end 
