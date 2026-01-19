@@ -1,29 +1,26 @@
-close all
-clear all
-setPaths;
-%
-% An RBF-FD example for solving the Poisson equation. Collocation and LS
-% unfitted or fitted methods.
-%
-dim = 2;                            % dim = 1,2 or 3
-display = 1;                        % Plot solution
-geom = 'ball';                      % ball or cube
-mode = 'collocation';                  % fitted, unfitted or collocation
-scaling = 1;                        % Include scaling of the unfitted LS problem
-mvCentres = 1;                      % Option to have a Y point on top of all X points inside the domain
-q = 3;                              % Oversampling
-N = 128;                            % Number of center points (X)
-ep = 1;                             % Not relevant for 'r3' basis
-phi = 'r3';                         % Choice of basis 'r3', 'mq', 'gs', 'iq', 'rbfqr'
-pdeg = 4;                           % Polynomial extension, not relevant for 'rbfqr'
-rbfDeg = 4;                         % Relevant when there is no polynomial extension
-extCoeff = 0.5;                     % Extension size (in % of stencil), relevant for unfitted method
+function [l2Error, h] = RBFFD_Poisson(pars)
+
+dim = pars.dim;                            % dim = 1,2 or 3
+display = pars.display;                        % Plot solution
+geom = pars.geom;                      % ball or cube
+mode = pars.mode;                    % fitted, unfitted or collocation
+scaling = pars.scaling;                        % Include scaling of the unfitted LS problem
+mvCentres = pars.mvCentres;                      % Option to have a Y point on top of all X points inside the domain
+q = pars.q;                              % Oversampling
+N = pars.N;                             % Number of center points (X) in each patch
+ep = pars.ep;                           % Not relevant for 'r3' basis
+phi = pars.phi;                      % Choice of basis 'r3', 'mq', 'gs', 'iq', 'rbfqr'
+pdeg = pars.pdeg;                          % Polynomial extension, not relevant for 'rbfqr'
+rbfdef = pars.rbfdeg;
+extCoeff = pars.extCoeff;
+
 if pdeg == -1
     n = nchoosek(rbfDeg+dim-1,dim); % Order in smooth RBF case
 else
     n = 2*nchoosek(pdeg+dim,dim);   % Stencil size
 end
 extCoeff = extCoeff*(strcmp(mode,"unfitted"));
+
 %
 % Place N centre points and M evaluation points in geom with centre C and radius R
 %
@@ -165,6 +162,7 @@ if strcmp(mode,"fitted")
     u = [u; ucExact(dataX.bnd)];
 end
 ue = Eglobal*u;
+l2Error = norm(abs(ue-uExact),2)/norm(uExact,2);
 %
 % Displaying output 
 %
@@ -176,7 +174,6 @@ if display
     %
     lapNumeric = Lglobal(dataY.inner,:)*ucExact;
     evalNumeric = Eglobal(dataY.bnd,:)*ucExact;
-    l2Error = norm(abs(ue-uExact),2)/norm(uExact,2);
     laplaceError = norm(lapAnalytic-lapNumeric,2)/norm(lapAnalytic,2);
     bndError = norm(evalNumeric-bndAnalytic,2)/(norm(bndAnalytic,2) + double(max(abs(bndAnalytic))==0));
     disp(['PDE error = ', num2str(l2Error)]);
@@ -437,3 +434,6 @@ end
 % xlim(ax, [-1.2 1.2]);
 % ylim(ax, [-1.8 1.2]);
 % axis equal
+
+end
+
