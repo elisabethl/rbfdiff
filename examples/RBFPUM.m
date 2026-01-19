@@ -7,14 +7,14 @@ setPaths;
 %
 dim = 2;                            % dim = 1,2 or 3
 display = 1;                        % Plot solution
-geom = 'cube';                      % ball or cube
-mode = 'fitted';                    % fitted, unfitted or collocation
+geom = 'ball';                      % ball or cube
+mode = 'unfitted';                    % fitted, unfitted or collocation
 bcMode = 'weak';                    % strong or weak imposition of boundary conditions (only relevant for fitted)
 scaling = 1;                        % Include scaling of the unfitted LS problem
 mvCentres = 1;                      % Option to have a Y point on top of all X points inside the domain
 q = 2;                              % Oversampling
-N = 35;                             % Number of center points (X) in each patch
-P = 27;                             % Number of patches
+N = 6;                             % Number of center points (X) in each patch
+P = 25;                             % Number of patches
 
 ep = 0.1;                           % Not relevant for 'r3' basis
 phi = 'rbfqr';                      % Choice of basis 'r3', 'mq', 'gs', 'iq', 'rbfqr'
@@ -79,7 +79,7 @@ end
 % Get evaluation points (Y)
 % 
 q = max(q*double(~strcmp(mode,"collocation")),1);
-M = N*P*q;    
+M = ceil(N*P*q);  
 if ~strcmp(mode,"collocation")
     dataY = getPts(geom,M,0,C,R,"fitted",0);
     %
@@ -171,8 +171,8 @@ end
 % Solution on centre points, evaluated on Y set
 %
 A = [L; B];
-Ltest = rank(full(L))
-Btest = rank(full(B))
+% Ltest = rank(full(L))
+% Btest = rank(full(B))
 u = A\F;
 %
 % Fix operators to compute error measures
@@ -404,7 +404,7 @@ function [] = plotPtch(ptch,geom,C,R)
                  C + [a a a]];
             x = [x; [x(:,1), x(:,2), x(:,3)-2*a]];
             plot3(x(:,1),x(:,2),x(:,3),'k-','LineWidth',2);
-            for i = 1:size(x)/2
+            for i = 1:size(x,1)/2
                 xPlot = [x(i,:); x(i+size(x,1)/2,:)];
                 plot3(xPlot(:,1),xPlot(:,2),xPlot(:,3),'k-','LineWidth',2);
             end
@@ -508,7 +508,7 @@ function data = getPts(geom,N,n,C,R,mode,extCoeff)
                 xB = [xB; [1,1,-1].*xB];
                 Ry = eye(dim); Ry(1,1) = cos(pi/2); Ry(dim,dim) = cos(pi/2); Ry(dim,1) = -sin(pi/2); Ry(1,dim) = sin(pi/2); % Rotate 90 degrees along y-axis
                 xB = [xB; (Ry*xB')'];
-                xB = unique(xB,'rows');
+                xB = uniquetol(xB,1e-14,'ByRows',true);
                 NbE = size(xB,1);
                 Rx = eye(dim); Rx(dim-1,dim-1) = cos(pi/2); Rx(dim,dim) = cos(pi/2); Rx(dim-1,dim) = -sin(pi/2); Rx(dim,dim-1) = sin(pi/2); % Rotate 90 degrees
                 xBF = [2*(dimLCoeff(dim)*R)*(halton(NbF,dim-1)-0.5), ones(NbF,1)*XYZLim(1)];
@@ -568,7 +568,54 @@ function ptch = getPtch(geom,P,C,R,del)
     end
     ptch.R = ptch.R*ones(size(ptch.C,1),1);
     if strcmp(geom,"ball")
-        idBall = find(sum((ptch.C - C).^2,2)<=(R+(0.5-del).*ptch.R).^2);
+        tol = 1e-6;
+        % Get closest patch neighbours based on distance
+        [idNei,distNei] = rangesearch(ptch.C,ptch.C,(2*ptch.R(1)-ptch.R(1)*del) + ptch.R(1)*tol);
+        % Find points of intersection between patches (2 patches in 2D and 4 in 3D)
+        edgePts = [];
+        for i = 1:size(idNei,1)
+            neiTemp = idNei{i};
+            distTemp = distNei{i};
+            % All possible patch combinations in neighbourhood, groups of 2 in 2D and 4 in 3D.
+            ptchComb = [nchoosek(neiTemp(2:end),2^(dim-1) - 1)];
+            ptchComb = [ones(size(ptchComb,1),1).*neiTemp(1), ptchComb];
+            for j = 1:size(ptchComb,1)
+                midPt = sum(ptch.C(ptchComb(j,:),:),1)/size(ptchComb,2);
+                tempDist = sqrt(sum((ptch.C(ptchComb(j,2:end),:) - ptch.C(ptchComb(j,1),:)).^2,2));
+                tempDir = (ptch.C(ptchComb(j,2:end),:) - ptch.C(ptchComb(j,1),:))./tempDist;
+                % Computing directions along which the edge point lies (starting from midPt)
+                if dim == 2
+                    t = (-ptch.C(neiTemp(1),:) + ptch.C(neiTemp(j+1),:))/norm((-ptch.C(neiTemp(1),:) + ptch.C(neiTemp(j+1),:)),2);
+                    t = [t(2), -t(1)];
+                    t2 = -t;
+                    keep = 1;
+                else
+                    t = cross(tempDir(1,:),tempDir(2,:));
+                    keep = ~dot(t,tempDir(end,:));
+                    t2 = cross(tempDir(1,:),-tempDir(2,:));
+                end
+                if keep % In 3D some combinations of patch centres do not form a plane
+                    tempL = sqrt((ptch.R(1)^2)-(max(tempDist)/2)^2);
+                    edgePts = [edgePts; tempL*t + midPt];
+                    edgePts = [edgePts; tempL*t2 + midPt];                     
+                end                    
+            end
+        end
+        edgePts= uniquetol(edgePts,tol,'ByRows',true);
+        % Make sure that points of intersection that are close to or inside
+        % the domain are fully covered. This guarantees no part of the
+        % boundary is left uncovered.
+        idEdgeIn = find(sum((edgePts - C).^2,2)<=(R+del.*ptch.R(1)).^2);
+        edgePtsIn = edgePts(idEdgeIn,:);
+        [~,ptchOrder] = sort(sum((ptch.C - C).^2,2),'ascend');
+        idBall = [];
+        for i = 1:size(edgePtsIn,1)
+            ptPtchList = sqrt(sum((edgePtsIn(i,:) - ptch.C(ptchOrder,:)).^2,2)) < ptch.R(ptchOrder) - ptch.R(ptchOrder).*tol;
+            idCand = find(ptPtchList);
+            idBall = [idBall ptchOrder(idCand(1))];
+        end
+        % idBall = find(sum(ptPtchList(idEdgeIn,:),1));
+        idBall = unique(idBall);
         ptch.C = ptch.C(idBall,:);
         ptch.R = ptch.R(idBall,:);
     end
