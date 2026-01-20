@@ -1,27 +1,22 @@
-close all
-clear all
-setPaths;
-%
-% An RBF-FD example for solving the Poisson equation. Collocation and LS
-% unfitted or fitted methods.
-%
-dim = 2;                            % dim = 1,2 or 3
-display = 1;                        % Plot solution
-geom = 'ball';                      % ball or cube
-mode = 'unfitted';                  % fitted, unfitted or collocation
-bcMode = 'weak';                    % strong or weak imposition of boundary conditions (only relevant for fitted)
-scaling = 1;                        % Include scaling of the unfitted LS problem
-mvCentres = 1;                      % Option to have a Y point on top of all X points inside the domain
-q = 3;                              % Oversampling
-N = 15;                             % Number of center points (X) in each patch
-P = 100;                            % Number of patches
+function [l2Error, h] = RBFPUM_Poisson(pars)
 
-ep = 0.1;                             % For 'phs': order of spline, 'mq', 'gs', 'iq', 'rbfqr': shape parameter, 'w2', 'bump': radius
-phi = 'rbfqr';                        % Choice of basis 'phs', 'mq', 'gs', 'iq', 'rbfqr', 'w2', 'bmp'
+dim = pars.dim;                            % dim = 1,2 or 3
+display = pars.display;                        % Plot solution
+geom = pars.geom;                      % ball or cube
+mode = pars.mode;                    % fitted, unfitted or collocation
+bcMode = pars.bcMode;                    % strong or weak imposition of boundary conditions (only relevant for fitted)
+scaling = pars.scaling;                        % Include scaling of the unfitted LS problem
+mvCentres = pars.mvCentres;                      % Option to have a Y point on top of all X points inside the domain
+q = pars.q;                              % Oversampling
+N = pars.N;                             % Number of center points (X) in each patch
+P = pars.P;                             % Number of patches
 
-psi = 'w2';                % Weight function: w2 or bmp
-pdeg = -1;                           % Polynomial extension, not relevant for 'rbfqr'
-del = 0.2;                          % Overlap between patches
+ep = pars.ep;                           % Not relevant for 'r3' basis
+phi = pars.phi;                      % Choice of basis 'r3', 'mq', 'gs', 'iq', 'rbfqr'
+
+psi = pars.psi;                % Weight function: wendland_c2 or bump
+pdeg = pars.pdeg;                          % Polynomial extension, not relevant for 'rbfqr'
+del = pars.del;                          % Overlap between patches
 %
 % Place P patches and M evaluation points in geom with centre C and radius R
 %
@@ -66,7 +61,9 @@ elseif strcmp(mode,"collocation")
     for i = 1:P
         ptch.xc(i).globalId = find(sqrt(sum((xc - ptch.C(i,:)).^2,2)) <= ptch.R(i));
         ptch.xc(i).nodes = xc(ptch.xc(i).globalId,:);
+        % L(i) = length(ptch.xc(i).nodes);
     end
+    % disp(['Minimum number of centres: ', int2str(min(L))])
 elseif strcmp(mode,"fitted") 
     dataX = getPts(geom,N*P,0,C,R,"fitted",0);
     xc = dataX.nodes;
@@ -79,7 +76,7 @@ end
 % Get evaluation points (Y)
 % 
 q = max(q*double(~strcmp(mode,"collocation")),1);
-M = ceil(N*P*q);  
+M = ceil(N*P*q);    
 if ~strcmp(mode,"collocation")
     dataY = getPts(geom,M,0,C,R,"fitted",0);
     %
@@ -605,14 +602,16 @@ function ptch = getPtch(geom,P,C,R,del)
         % Make sure that points of intersection that are close to or inside
         % the domain are fully covered. This guarantees no part of the
         % boundary is left uncovered.
-        idEdgeIn = find(sum((edgePts - C).^2,2)<=(R+del.*ptch.R(1)).^2);
+        idEdgeIn = find(sum((edgePts - C).^2,2)<=(R+(del/10).*ptch.R(1)).^2);
         edgePtsIn = edgePts(idEdgeIn,:);
         [~,ptchOrder] = sort(sum((ptch.C - C).^2,2),'ascend');
         idBall = [];
         for i = 1:size(edgePtsIn,1)
             ptPtchList = sqrt(sum((edgePtsIn(i,:) - ptch.C(ptchOrder,:)).^2,2)) < ptch.R(ptchOrder) - ptch.R(ptchOrder).*tol;
             idCand = find(ptPtchList);
-            idBall = [idBall ptchOrder(idCand(1))];
+            if ~isempty(idCand)
+                idBall = [idBall ptchOrder(idCand(1))];
+            end
         end
         % idBall = find(sum(ptPtchList(idEdgeIn,:),1));
         idBall = unique(idBall);
@@ -676,4 +675,6 @@ function dataY = movePts(dataX,dataY)
         end
         dataY.nodes(dataY.bnd,:) = xeBnd;
     end
+end
+
 end

@@ -56,7 +56,7 @@ if strcmp(phi,'rbfqr')
     end
     Psi.phi = phi;
 
-elseif strcmp(phi,'w2') | strcmp(phi,'bump') % Compactly supported cases
+elseif strcmp(phi,'w2') | strcmp(phi,'bmp') % Compactly supported cases
     %
     % In this case, we want to scale such that ep (rho) = 1
     %

@@ -8,13 +8,13 @@ setPaths;
 dim = 2;                            % dim = 1,2 or 3
 display = 1;                        % Plot solution
 geom = 'ball';                      % ball or cube
-mode = 'collocation';                  % fitted, unfitted or collocation
+mode = 'unfitted';                  % fitted, unfitted or collocation
 scaling = 1;                        % Include scaling of the unfitted LS problem
 mvCentres = 1;                      % Option to have a Y point on top of all X points inside the domain
 q = 3;                              % Oversampling
-N = 128;                            % Number of center points (X)
-ep = 1;                             % Not relevant for 'r3' basis
-phi = 'r3';                         % Choice of basis 'r3', 'mq', 'gs', 'iq', 'rbfqr'
+N = 500;                            % Number of center points (X)
+ep = 3;                             % For 'phs': order of spline, 'mq', 'gs', 'iq', 'rbfqr': shape parameter, 'w2', 'bump': radius
+phi = 'phs';                        % Choice of basis 'phs', 'mq', 'gs', 'iq', 'rbfqr', 'w2', 'bmp'
 pdeg = 4;                           % Polynomial extension, not relevant for 'rbfqr'
 rbfDeg = 4;                         % Relevant when there is no polynomial extension
 extCoeff = 0.5;                     % Extension size (in % of stencil), relevant for unfitted method
