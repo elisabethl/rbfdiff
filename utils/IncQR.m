@@ -132,11 +132,11 @@ if (Q.q <= N)
       R.def_ord = [R.def_ord cols(pos(loc))];
       R.def_pow = [R.def_pow pow(p1)];
       if (mag(p1)<=log10(10*zz))
-        'Zero'
+        % 'Zero'
         pow(p1) = pow(p1) + 5; % Zero, move forward
       end
       if (Q.q > N)
-        'Already at the end'
+        % 'Already at the end'
         pow(p1)=1; % Take these into the final R at the end
       end
       R.def_j = [R.def_j j+pow(p1)];
@@ -146,14 +146,14 @@ if (Q.q <= N)
         loc = Enew(p2(k))-n;
         % --- Check if we can move it even further. It is small also
         % here.
-        'Redefer?'
+        % 'Redefer?'
         pow(p2(k)) = pow(p2(k)) - R.def_pow(dpos(loc));
         if (mag(p2(k)) <= log10(10*zz))
-          'Zero'
+          % 'Zero'
           pow(p2(k)) = 5; % Zero, move forward
         end
         if (pow(p2(k))>0)
-          'Moving'
+          % 'Moving'
           R.def_pow(dpos(loc)) = R.def_pow(dpos(loc)) + pow(p2(k));
           R.def_j(dpos(loc)) = j+pow(p2(k));
         else

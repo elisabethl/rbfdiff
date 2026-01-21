@@ -8,20 +8,20 @@ setPaths;
 dim = 2;                            % dim = 1,2 or 3
 display = 1;                        % Plot solution
 geom = 'ball';                      % ball or cube
-mode = 'collocation';                    % fitted, unfitted or collocation
+mode = 'unfitted';                  % fitted, unfitted or collocation
 bcMode = 'weak';                    % strong or weak imposition of boundary conditions (only relevant for fitted)
 scaling = 1;                        % Include scaling of the unfitted LS problem
 mvCentres = 1;                      % Option to have a Y point on top of all X points inside the domain
-q = 2;                              % Oversampling
+q = 3;                              % Oversampling
 N = 15;                             % Number of center points (X) in each patch
-P = 100;                             % Number of patches
+P = 100;                            % Number of patches
 
-ep = 0.1;                           % Not relevant for 'r3' basis
-phi = 'rbfqr';                      % Choice of basis 'r3', 'mq', 'gs', 'iq', 'rbfqr'
+ep = 0.1;                             % For 'phs': order of spline, 'mq', 'gs', 'iq', 'rbfqr': shape parameter, 'w2', 'bump': radius
+phi = 'rbfqr';                        % Choice of basis 'phs', 'mq', 'gs', 'iq', 'rbfqr', 'w2', 'bmp'
 
-psi = 'wendland_c2';                % Weight function: wendland_c2 or bump
-pdeg = -1;                          % Polynomial extension, not relevant for 'rbfqr'
-del = 0.25;                          % Overlap between patches
+psi = 'w2';                % Weight function: w2 or bmp
+pdeg = -1;                           % Polynomial extension, not relevant for 'rbfqr'
+del = 0.2;                          % Overlap between patches
 %
 % Place P patches and M evaluation points in geom with centre C and radius R
 %
