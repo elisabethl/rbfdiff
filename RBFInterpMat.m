@@ -56,24 +56,23 @@ if strcmp(phi,'rbfqr')
     end
     Psi.phi = phi;
 
-elseif strcmp(phi,'w2') | strcmp(phi,'bump') % Compactly supported cases
+elseif strcmp(phi,'w2') | strcmp(phi,'bmp') % Compactly supported cases
     %
-    % In this case, we want to scale such that ep (rho) = 1
+    % In this case, we do not scale att all here
     %
     Psi.cc = zeros(1,dim);
-    Psi.rr = ep; % Distances are divided by rho to make radius unit
-    xloc = xc/ep;
-    Psi.ep = 1; % Unit radius 
+    Psi.rr = 1;
+    Psi.ep = ep;
     %
     % RBF-Direct. Compute distance matrix
     %
-    rc = xcdist(xloc);
+    rc = xcdist(xc);
     A = RBFmat(phi,ep,rc,'0');
 
     Psi.A0 = A;
     Psi.phi = phi;
     Psi.pdeg = -1; % Polynomials should not be added, and we explicitly block that
-    Psi.xloc = xloc;
+    Psi.xloc = xc;
     %
     % Factorize A. A(piv,:) = L*U, piv is a permutation vector. 
     % Cholesky A = L'*L; can be used for pos. def. matrices.
@@ -103,7 +102,7 @@ else
     Psi.cc = cc;
 
     xloc = xloc./rr;
-    if ~strcmp(phi,'phs') % In this case, the order is given as th shape parameter
+    if ~strcmp(phi,'phs') % For phs the shape parameter is the order
       ep = ep*rr;
     end  
     %

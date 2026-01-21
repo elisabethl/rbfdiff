@@ -3,7 +3,6 @@
 % derivatives for sensible parameter combinations. The tester can choose
 % basis function and dimension and will be presented with convergence plots.
 %
-% TODO: Calculations, and perhaps give x and xe as inparameters. Then we can try special regions. Perhaps do one for 1D and one for 2D etc, but these are in a sense the mains that we have. We want to be able to have '1'
 function [epvec,relerr,relgrad,relhess,rellap] = testRBFDiffMat(phi,dim,fnum)
 close all
 
@@ -49,7 +48,7 @@ else
   hstr =   {'$f_{xx}$','$f_{xy}$','$f_{xz}$','$f_{yy}$','$f_{yz}$','$f_{zz}$'};
 end        
 % With or without a polynomial term
-if (strcmp(phi,'rbfqr'))
+if (strcmp(phi,'rbfqr') | strcmp(phi,'w2') | strcmp(phi,'bmp') )
     % We do not add polynomials in the RBF-QR case, since the basis functions
     % themselves are close to polynomials in the limit
     pdegv = -1; 
@@ -62,8 +61,16 @@ nodeGen = 'halt';
 
 % To make convergence curves, we select a few different N and a range of
 % shape parameters
+nfac = 1;
 if strcmp(phi,'rbfqr')
     epvec = logspace(-2,log10(2),25);
+elseif strcmp(phi,'w2') % Compactly supported, ep is radius rho
+    epvec = linspace(0.3,2,25);
+    nfac = 10; % Use more points for the compactly supported w2 function
+elseif strcmp(phi,'bmp') % Compactly supported, ep is radius rho
+    epvec = linspace(1.5,3,25);
+elseif strcmp(phi,'phs')
+    epvec = [ 3 5 7 9];
 else
     epvec = logspace(log10(0.25),log10(5),25);
 end    
@@ -74,6 +81,7 @@ elseif (dim==2)
 elseif (dim==3)
     nVec = [35 56 84 120];
 end    
+nVec = nfac*nVec;
 
 if (dim==1)
   argstr = '(xc(:,1),y0,z0);';

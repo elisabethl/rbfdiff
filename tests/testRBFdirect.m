@@ -2,21 +2,46 @@ clear
 close all
 setPaths
 %
-% Testing the RBFmat implementation
+% Testing the RBFDiffmat implementation for different types of vasis functions
 %
-phi = {'phs','w2','bmp','rbfqr','mq','gs','iq'};
-pdeg = [3 -1 -1 -1 3 2 1]; % One number for each basis
 dim = 2; % For 1D: 8, 2D: 28, 3D: 56
-if dim == 1
-    N = 8;
-elseif dim == 2
-    N = 28;
-else
-    N = 56; 
+R = 1;
+prob = 4;
+switch prob
+  case 1
+    phi = {'mq','gs','iq'};
+    pdeg = [-1 -1 -1]; % One value per phi
+    epmin = 2e-1;
+    epmax = 5;
+    epvec = logspace(log10(epmin),log10(epmax),25);
+  case 2
+    phi = {'rbfqr'};
+    pdeg = [-1]; % One value per phi
+    epmin = 1e-2;
+    epmax = 2;
+    epvec = logspace(log10(epmin),log10(epmax),25);
+  case 3
+    phi = {'w2'};
+    pdeg = [-1]; % One value per phi
+    epvec = linspace(0.5,2,10); % The radius of the support
+  case 4
+    phi = {'phs'};
+    pdeg = [3]; % One value per phi
+    epvec = [3 5 7 9]; % The order of the PHS
 end
-Ne = N*4; % Oversampling
-epvec = logspace(-2,0,100);
-fnum = 2; % 1 = constant, 2 = sin(pi*x*y*z)
+lt = {'-','--'};
+col = colormap(lines);               
+col = col([1 2 4 5 6 7 3],:);
+
+if dim == 1
+    Nvec = [8 16];
+elseif dim == 2
+    Nvec = [28 55];
+else
+    Nvec = [56 84]; 
+end
+oversamp = 4; % Oversampling
+fnum = 2; % 1 = constant, 2 = sin(pi/2*x*y*z)
 
 syms x y z
 X = [x;y;z];
@@ -31,7 +56,7 @@ if (fnum==1)
         end
     end
 elseif (fnum == 2)
-    fun = sin(prod(X(1:dim))*pi);
+    fun = sin(prod(X(1:dim))*pi/2);
     lapFun = 0;
     for i = 1:dim
         gradFun{i} = matlabFunction(diff(fun,X(i)));
@@ -42,30 +67,36 @@ elseif (fnum == 2)
     end
     fun = matlabFunction(fun);
     lapFun = matlabFunction(lapFun);
-end    
+end
+
+nfig = 2 + dim + dim^2;
+for k=1:nfig
+    fig(k) = figure;
+end
+
+for p=1:length(Nvec)
+    N = Nvec(p);
+    Ne = N*oversamp;
 %
-% We place halton points in a circle centred at "shift" and stretched with R
+% We place halton points on a unit sphere in dim dimensions
 %
 dimRat = [1 1.2*4/pi 1.2*8/(4*pi/3)];
 Nin = ceil(dimRat(dim)*N);
 NinE = ceil(dimRat(dim)*Ne);
-shift = [-1,3.2,-4]; % Point centre in 3D case
-shift = shift(1:dim);
 
-R = 2;
-xc = 2.*R.*(halton(Nin,dim)-0.5);
+xc = 2*(halton(Nin,dim)-0.5);
 r2 = sqrt(sum(xc.^2,2));
-pos = find(r2<=max(R));
+pos = find(r2<=1);
 pos = pos(1:N);
-xc = xc(pos,:) + shift; 
+xc = xc(pos,:); 
 %
 % We do the same for the evaluation points
 %
-xe = 2.*R.*(halton(NinE,dim)-0.5);
+xe = 2*(halton(NinE,dim)-0.5);
 r2 = sqrt(sum(xe.^2,2));
-pos = find(r2<=max(R));
+pos = find(r2<=1);
 pos = pos(1:Ne);
-xe = xe(pos,:) + shift;
+xe = xe(pos,:);
 
 if (fnum==1)
     uc = fun(xc);
@@ -91,6 +122,7 @@ elseif (fnum == 2)
     end
 end  
 
+C = zeros(1,dim); R = 1; % For the unit sphere
 for j=1:length(epvec)
     ep = epvec(j);
     for k=1:length(phi)
@@ -98,15 +130,7 @@ for j=1:length(epvec)
         %
         % Initialize the approximation
         %
-	if strcmp(phi{k},'phs')
-	  order = 3; % The order
-	  Psi = RBFInterpMat(phi{k},pdeg(k),order,xc,shift,R);
-	elseif strcmp(phi{k},'w2') | strcmp(phi,'bmp')
-	  rho = R; % Support radius, rather wide
-	  Psi = RBFInterpMat(phi{k},pdeg(k),rho,xc,shift,R);
-	else
-          Psi = RBFInterpMat(phi{k},pdeg(k),ep,xc,shift,R);
-	end  
+      Psi = RBFInterpMat(phi{k},pdeg(k),ep,xc,C,R);
         %
         % Compute all differentiation matrices
         %
@@ -129,28 +153,66 @@ end
 %
 % Plot errors in all derivatives
 %
-figure
-loglog(epvec,erru)
+figure(fig(1))
+H = loglog(epvec,erru); hold on
+fixFig(H,lt(p),col,0)
 legend(phi)
-title("Evaluation error")
 
-figure
-loglog(epvec,errL)
+
+figure(fig(2))
+H = loglog(epvec,errL); hold on
+fixFig(H,lt(p),col,[2 2])
 legend(phi)
-title("Laplace error")
+
 
 for i = 1:dim
-    figure()
-    loglog(epvec,errGradU{i});
+    figure(fig(2+i))
+    H = loglog(epvec,errGradU{i}); hold on
+    fixFig(H,lt(p),col,i)
     legend(phi)
-    title(['d/dx',num2str(i),' error']) 
 end
 
 for i = 1:dim
     for j = 1:dim
-        figure()
-        loglog(epvec,errHessU{i,j});
+        figure(fig(2+dim+((i-1)*dim+j)))
+        H = loglog(epvec,errHessU{i,j}); hold on
+        fixFig(H,lt(p),col,[i j])
         legend(phi)
-        title(['d/dx',num2str(i),num2str(j),' error']) 
     end
 end
+end
+for k=1:length(fig)
+    figure(fig(k))
+    ax = axis;
+    ax(4) = 50; % Cap the y-axis
+    axis(ax)
+    for j=1:length(Nvec)
+        for i=1:length(phi)
+            lstr{(j-1)*length(phi)+i} = strcat(phi{i},', N=', num2str(Nvec(j)));
+        end    
+        H = legend(lstr);
+        set(H,'NumColumns',2,'Location','NorthWest')
+    end
+end
+
+function fixFig(H,lt,col,deriv)
+    for k=1:length(H)
+        set(H(k),'LineStyle',lt,'Color',col(k,:),'LineWidth',2)  
+    end
+    set(gca,'FontSize',18)
+    set(gcf,'Color','w')
+    xlabel('$\varepsilon$','interpreter','latex')
+    if deriv==0
+        str = 'Evaluation error';
+    elseif all(deriv==2)
+        str = 'Laplacian error';    
+    elseif length(deriv)==1
+        str = strcat('Error in $\frac{\partial\phi}{\partial x_',num2str(deriv),'}$');
+    elseif deriv(1)==deriv(2)
+        str = strcat('Error in $\frac{\partial^2\phi}{\partial x_',num2str(deriv(1)),'^2}$');  
+    else    
+        str = strcat(' Error in $\frac{\partial^2\phi}{\partial x_',num2str(deriv(1)),'\partial x_',num2str(deriv(2)),'}$');
+    end    
+    title(str,'interpreter','latex')
+end
+
