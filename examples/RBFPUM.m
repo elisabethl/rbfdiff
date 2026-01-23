@@ -5,7 +5,7 @@ setPaths;
 % An RBF-FD example for solving the Poisson equation. Collocation and LS
 % unfitted or fitted methods.
 %
-dim = 2;                            % dim = 1,2 or 3
+dim = 3;                            % dim = 1,2 or 3
 display = 1;                        % Plot solution
 geom = 'ball';                      % ball or cube
 mode = 'unfitted';                  % fitted, unfitted or collocation
@@ -14,7 +14,7 @@ scaling = 1;                        % Include scaling of the unfitted LS problem
 mvCentres = 1;                      % Option to have a Y point on top of all X points inside the domain
 q = 3;                              % Oversampling
 N = 15;                             % Number of center points (X) in each patch
-P = 100;                            % Number of patches
+P = 25;                            % Number of patches
 
 ep = 0.1;                             % For 'phs': order of spline, 'mq', 'gs', 'iq', 'rbfqr': shape parameter, 'w2', 'bump': radius
 phi = 'rbfqr';                        % Choice of basis 'phs', 'mq', 'gs', 'iq', 'rbfqr', 'w2', 'bmp'
@@ -569,10 +569,17 @@ function ptch = getPtch(geom,P,C,R,del)
     ptch.R = ptch.R*ones(size(ptch.C,1),1);
     if strcmp(geom,"ball")
         tol = 1e-6;
+        % Remove patches with centres that are outside the domain
+        idCentreIn = find(sum((ptch.C - C).^2,2)<=R.^2);
+        ptch.C = ptch.C(idCentreIn,:);
+        ptch.R = ptch.R(idCentreIn,:);
         % Get closest patch neighbours based on distance
         [idNei,distNei] = rangesearch(ptch.C,ptch.C,(2*ptch.R(1)-ptch.R(1)*del) + ptch.R(1)*tol);
         % Find points of intersection between patches (2 patches in 2D and 4 in 3D)
         edgePts = [];
+        midPt = [];
+        dirEdgePt = [];
+        ptchId = [];
         for i = 1:size(idNei,1)
             neiTemp = idNei{i};
             distTemp = distNei{i};
@@ -580,7 +587,7 @@ function ptch = getPtch(geom,P,C,R,del)
             ptchComb = [nchoosek(neiTemp(2:end),2^(dim-1) - 1)];
             ptchComb = [ones(size(ptchComb,1),1).*neiTemp(1), ptchComb];
             for j = 1:size(ptchComb,1)
-                midPt = sum(ptch.C(ptchComb(j,:),:),1)/size(ptchComb,2);
+                midPtTemp = sum(ptch.C(ptchComb(j,:),:),1)/size(ptchComb,2);
                 tempDist = sqrt(sum((ptch.C(ptchComb(j,2:end),:) - ptch.C(ptchComb(j,1),:)).^2,2));
                 tempDir = (ptch.C(ptchComb(j,2:end),:) - ptch.C(ptchComb(j,1),:))./tempDist;
                 % Computing directions along which the edge point lies (starting from midPt)
@@ -596,28 +603,42 @@ function ptch = getPtch(geom,P,C,R,del)
                 end
                 if keep % In 3D some combinations of patch centres do not form a plane
                     tempL = sqrt((ptch.R(1)^2)-(max(tempDist)/2)^2);
-                    edgePts = [edgePts; tempL*t + midPt];
-                    edgePts = [edgePts; tempL*t2 + midPt];                     
+                    edgePts = [edgePts; tempL*t + midPtTemp];
+                    edgePts = [edgePts; tempL*t2 + midPtTemp];
+                    ptchId = [ptchId; ptchComb(j,:); ptchComb(j,:)];
+                    midPt = [midPt; midPtTemp; midPtTemp];
                 end                    
             end
         end
-        edgePts= uniquetol(edgePts,tol,'ByRows',true);
-        % Make sure that points of intersection that are close to or inside
-        % the domain are fully covered. This guarantees no part of the
-        % boundary is left uncovered.
-        idEdgeIn = find(sum((edgePts - C).^2,2)<=(R+del.*ptch.R(1)).^2);
-        edgePtsIn = edgePts(idEdgeIn,:);
-        [~,ptchOrder] = sort(sum((ptch.C - C).^2,2),'ascend');
-        idBall = [];
-        for i = 1:size(edgePtsIn,1)
-            ptPtchList = sqrt(sum((edgePtsIn(i,:) - ptch.C(ptchOrder,:)).^2,2)) < ptch.R(ptchOrder) - ptch.R(ptchOrder).*tol;
-            idCand = find(ptPtchList);
-            idBall = [idBall ptchOrder(idCand(1))];
+        [edgePts ,idKeep]= uniquetol(edgePts,tol,'ByRows',true);
+        ptchId = ptchId(idKeep,:);
+        midPt = midPt(idKeep,:);
+        %
+        % Find edge points that are not covered
+        %
+        for i = 1:size(edgePts,1)
+            ptPtchList(i,:) = sqrt(sum((edgePts(i,:) - ptch.C).^2,2)) <= ptch.R - ptch.R.*(tol); % Points covered by which patches
         end
-        % idBall = find(sum(ptPtchList(idEdgeIn,:),1));
-        idBall = unique(idBall);
-        ptch.C = ptch.C(idBall,:);
-        ptch.R = ptch.R(idBall,:);
+        %
+        % Extend patch sizes to overlap these points. As a result the
+        % extension at least a distance of del*ptch.R from the boundary 
+        %
+        for j = 1:size(edgePts,1)
+            if isempty(find(ptPtchList(j,:))) && sqrt(sum((edgePts(j,:)-C).^2)) <= R + del*ptch.R(ptchId(j,1),:)
+                r = R + del*ptch.R(ptchId(j,1)); 
+                % Direction along which edge point will move when pacthes
+                % are equaly extended
+                gamma = (-midPt(j,:)+edgePts(j,:))./sqrt(sum((edgePts(j,:)-midPt(j,:)).^2)); 
+                theta = acos(dot(((C-edgePts(j,:))./sqrt(sum((edgePts(j,:)-C).^2))),gamma));
+                if abs(theta) <= pi + tol && abs(theta) >= pi - tol % In case gamma direction is towards the centre of the domain
+                    theta = pi;
+                end
+                SQ = (cos(theta).*sqrt(sum((edgePts(j,:)-C).^2))).^2 - sum((edgePts(j,:)-C).^2) + r^2;
+                dMv = sqrt(sum((edgePts(j,:)-C).^2))*cos(theta) + sqrt(SQ);
+                y = edgePts(j,:) + dMv.*gamma;
+                ptch.R(ptchId(j,:)) = sqrt(sum((y - ptch.C(ptchId(j,1),:)).^2));
+            end
+        end
     end
 end
 %
