@@ -5,7 +5,7 @@
 % previous derivative level e.g. d^4 f/dx_1^4 = d/dx_1(d^3 f/dx_1^3).
 % For 3D, the relative error between the 2 is instead provided as a full
 % visual comparison is difficult.
-function phival=testRBFder(phi,ep,dim)
+function [phival,xe,xc]=testRBFder(phi,ep,dim)
 close all  
 %
 % We let the domain be [-1 1]^dim with the RBF centered at the origin.
