@@ -1,27 +1,22 @@
-close all
-clear all
-setPaths;
-%
-% An RBF-FD example for solving the Poisson equation. Collocation and LS
-% unfitted or fitted methods.
-%
-dim = 2;                            % dim = 1,2 or 3
-display = 1;                        % Plot solution
-geom = 'ball';                      % ball or cube
-mode = 'collocation';                  % fitted, unfitted or collocation
-bcMode = 'weak';                    % strong or weak imposition of boundary conditions (only relevant for fitted)
-scaling = 1;                        % Include scaling of the unfitted LS problem
-mvCentres = 1;                      % Option to have a Y point on top of all X points inside the domain
-q = 3;                              % Oversampling
-N = 6;                             % Number of center points (X) in each patch
-P = 100;                            % Number of patches
+function [l2Error, h] = RBFPUM_Poisson(pars)
 
-ep = 0.1;                             % For 'phs': order of spline, 'mq', 'gs', 'iq', 'rbfqr': shape parameter, 'w2', 'bump': radius
-phi = 'rbfqr';                        % Choice of basis 'phs', 'mq', 'gs', 'iq', 'rbfqr', 'w2', 'bmp'
+dim = pars.dim;                            % dim = 1,2 or 3
+display = pars.display;                        % Plot solution
+geom = pars.geom;                      % ball or cube
+mode = pars.mode;                    % fitted, unfitted or collocation
+bcMode = pars.bcMode;                    % strong or weak imposition of boundary conditions (only relevant for fitted)
+scaling = pars.scaling;                        % Include scaling of the unfitted LS problem
+mvCentres = pars.mvCentres;                      % Option to have a Y point on top of all X points inside the domain
+q = pars.q;                              % Oversampling
+N = pars.N;                             % Number of center points (X) in each patch
+P = pars.P;                             % Number of patches
 
-psi = 'w2';                % Weight function: w2 or bmp
-pdeg = -1;                           % Polynomial extension, not relevant for 'rbfqr'
-del = 0.4;                          % Overlap between patches
+ep = pars.ep;                           % Not relevant for 'r3' basis
+phi = pars.phi;                      % Choice of basis 'r3', 'mq', 'gs', 'iq', 'rbfqr'
+
+psi = pars.psi;                % Weight function: wendland_c2 or bump
+pdeg = pars.pdeg;                          % Polynomial extension, not relevant for 'rbfqr'
+del = pars.del;                          % Overlap between patches
 %
 % Place P patches and M evaluation points in geom with centre C and radius R
 %
@@ -38,7 +33,7 @@ end
 % Get patches  
 %
 ptch = getPtch(geom,P,C,R,del);
-plotPtch(ptch,geom,C,R);
+% plotPtch(ptch,geom,C,R);
 P = length(ptch.R);
 %
 % Get center points (X)
@@ -66,7 +61,9 @@ elseif strcmp(mode,"collocation")
     for i = 1:P
         ptch.xc(i).globalId = find(sqrt(sum((xc - ptch.C(i,:)).^2,2)) <= ptch.R(i));
         ptch.xc(i).nodes = xc(ptch.xc(i).globalId,:);
+        % L(i) = length(ptch.xc(i).nodes);
     end
+    % disp(['Minimum number of centres: ', int2str(min(L))])
 elseif strcmp(mode,"fitted") 
     dataX = getPts(geom,N*P,0,C,R,"fitted",0);
     xc = dataX.nodes;
@@ -79,7 +76,7 @@ end
 % Get evaluation points (Y)
 % 
 q = max(q*double(~strcmp(mode,"collocation")),1);
-M = ceil(N*P*q);  
+M = ceil(N*P*q);    
 if ~strcmp(mode,"collocation")
     dataY = getPts(geom,M,0,C,R,"fitted",0);
     %
@@ -171,6 +168,8 @@ end
 % Solution on centre points, evaluated on Y set
 %
 A = [L; B];
+% Ltest = rank(full(L))
+% Btest = rank(full(B))
 u = A\F;
 %
 % Fix operators to compute error measures
@@ -193,15 +192,31 @@ if display
         evalPtPlot = plot(xe,zeros(size(xe,1),1),'b.');
         centerPtPlot = plot(xc,zeros(size(xc,1),1),'rx');
     elseif dim == 2
-        evalPtPlot = plot(xe(:,1),xe(:,2),'b.');
-        centerPtPlot = plot(xc(:,1),xc(:,2),'rx');
+        centerPtPlot = plot(xc(:,1),xc(:,2),'rx','MarkerSize',8,'LineWidth',3);
+        if ~strcmp(mode,"collocation")
+            evalPtPlot = plot(xe(:,1),xe(:,2),'b.','MarkerSize',8);
+        end
     elseif dim == 3
         evalPtPlot = plot3(xe(:,1),xe(:,2),xe(:,3),'b.');
         hold on
         centerPtPlot = plot3(xc(:,1),xc(:,2),xc(:,3),'rx');
     end
-    legend([evalPtPlot centerPtPlot],'Evaluation points','Center points','FontSize',18,'Interpreter','latex');
-    
+    ax = gca;
+    ax.LineWidth = 1.5;
+    ax.FontSize = 18;
+    xlabel("x",'Interpreter','latex','FontSize',20)
+    ylabel("y",'Interpreter','latex','FontSize',20,'Rotation',0)
+    xlim([-1.75 1.75]);
+    ylim([-1.75 1.35]);
+    if strcmp(mode,"unfitted")
+        l = legend('Patches','Domain, $\Omega$','Node points','Eval points','Interpreter','latex','location','south','Orientation','Horizontal');
+        l.NumColumns = 2;
+        l.FontSize = 20; 
+    else
+        l = legend('Patches','Domain, $\Omega$','Node points','Interpreter','latex','location','south','Orientation','Horizontal');
+        l.FontSize = 20; 
+    end
+
     plotSolution(ue,uExact,xe,dataY.bnd,dim,geom);
     %
     % Operator and solution l2 errors
@@ -246,7 +261,7 @@ function [] = plotSolution(uNumeric,uAnalytic,x,idB,dim,geom)
         G=trisurf(T,x(:,1),x(:,2),uAnalytic);
         hold on
         if strcmp(geom,"ball")
-            plot(x(idB,1),x(idB,2),'k-',"LineWidth",1.5)
+            plot(x([idB; idB(1)],1),x([idB; idB(1)],2),'k-',"LineWidth",1.5)
         elseif strcmp(geom,"cube")
             plot([max(x(idB,1)) max(x(idB,1)) min(x(idB,1)) min(x(idB,1)) max(x(idB,1))],...
                  [max(x(idB,2)) min(x(idB,2)) min(x(idB,2)) max(x(idB,2)) max(x(idB,2))],'k-',"LineWidth",1.5)
@@ -263,7 +278,7 @@ function [] = plotSolution(uNumeric,uAnalytic,x,idB,dim,geom)
         G=trisurf(T,x(:,1),x(:,2),uNumeric);
         hold on
         if strcmp(geom,"ball")
-            plot(x(idB,1),x(idB,2),'k-',"LineWidth",1.5)
+            plot(x([idB; idB(1)],1),x([idB; idB(1)],2),'k-',"LineWidth",1.5)
         elseif strcmp(geom,"cube")
             plot([max(x(idB,1)) max(x(idB,1)) min(x(idB,1)) min(x(idB,1)) max(x(idB,1))],...
                  [max(x(idB,2)) min(x(idB,2)) min(x(idB,2)) max(x(idB,2)) max(x(idB,2))],'k-',"LineWidth",1.5)
@@ -280,7 +295,7 @@ function [] = plotSolution(uNumeric,uAnalytic,x,idB,dim,geom)
         G=trisurf(T,x(:,1),x(:,2),error);
         hold on
         if strcmp(geom,"ball")
-            plot(x(idB,1),x(idB,2),'k-',"LineWidth",1.5)
+            plot(x([idB; idB(1)],1),x([idB; idB(1)],2),'k-',"LineWidth",1.5)
         elseif strcmp(geom,"cube")
             plot([max(x(idB,1)) max(x(idB,1)) min(x(idB,1)) min(x(idB,1)) max(x(idB,1))],...
                  [max(x(idB,2)) min(x(idB,2)) min(x(idB,2)) max(x(idB,2)) max(x(idB,2))],'k-',"LineWidth",1.5)
@@ -362,11 +377,12 @@ function [] = plotPtch(ptch,geom,C,R)
             altern = mod(i,2)*1e-2;
         end
     elseif dim == 2
-        for i = 1:size(ptch.C,1)
-            plot(ptch.C(i,1),ptch.C(i,2),'ro');
-            hold on
+        x = ptch.C(1,:) + [ptch.R(1)*cos(theta), ptch.R(1)*sin(theta)];
+        plot(x(:,1),x(:,2),'k-')
+        hold on
+        for i = 2:size(ptch.C,1)
             x = ptch.C(i,:) + [ptch.R(i)*cos(theta), ptch.R(i)*sin(theta)];
-            plot(x(:,1),x(:,2),'k-')
+            plot(x(:,1),x(:,2),'k-','HandleVisibility','off')
         end
     elseif dim == 3
         [x,y,z] = sphere(10);
@@ -414,7 +430,7 @@ function [] = plotPtch(ptch,geom,C,R)
             plot(x(:,1),zeros(size(x,1)),'ko');
         elseif dim == 2
             theta = linspace(0,2*pi,1000);
-            plot(R.*cos(theta),R.*sin(theta),'k-')
+            plot(R.*cos(theta),R.*sin(theta),'b-','LineWidth',2)
         elseif dim == 3
             [x,y,z] = sphere(20);
             surf(x.*R+C(1),y.*R+C(2),z.*R+C(3),'FaceColor','none','LineWidth',2);
@@ -567,7 +583,8 @@ function ptch = getPtch(geom,P,C,R,del)
     ptch.R = ptch.R*ones(size(ptch.C,1),1);
     if strcmp(geom,"ball")
         tol = 1e-6;
-        % Remove patches with centres that are outside the domain
+
+
         idCentreIn = find(sum((ptch.C - C).^2,2)<=R.^2);
         ptch.C = ptch.C(idCentreIn,:);
         ptch.R = ptch.R(idCentreIn,:);
@@ -611,29 +628,25 @@ function ptch = getPtch(geom,P,C,R,del)
         [edgePts ,idKeep]= uniquetol(edgePts,tol,'ByRows',true);
         ptchId = ptchId(idKeep,:);
         midPt = midPt(idKeep,:);
-        %
-        % Find edge points that are not covered
-        %
+        
         for i = 1:size(edgePts,1)
             ptPtchList(i,:) = sqrt(sum((edgePts(i,:) - ptch.C).^2,2)) <= ptch.R - ptch.R.*(tol); % Points covered by which patches
         end
         %
-        % Extend patch sizes to overlap these points. As a result the
-        % extension at least a distance of del*ptch.R from the boundary 
+        % Findins edge points that are not covered and are further than
+        % del*ptch.R from the boundary
         %
         for j = 1:size(edgePts,1)
             if isempty(find(ptPtchList(j,:))) && sqrt(sum((edgePts(j,:)-C).^2)) <= R + del*ptch.R(ptchId(j,1),:)
-                r = R + del*ptch.R(ptchId(j,1)); 
-                % Direction along which edge point will move when pacthes
-                % are equaly extended
-                gamma = (-midPt(j,:)+edgePts(j,:))./sqrt(sum((edgePts(j,:)-midPt(j,:)).^2)); 
+                r = R + del*ptch.R(ptchId(j,1));
+                gamma = (-midPt(j,:)+edgePts(j,:))./sqrt(sum((edgePts(j,:)-midPt(j,:)).^2));
                 theta = acos(dot(((C-edgePts(j,:))./sqrt(sum((edgePts(j,:)-C).^2))),gamma));
-                if abs(theta) <= pi + tol && abs(theta) >= pi - tol % In case gamma direction is towards the centre of the domain
+                if abs(theta) <= pi + tol && abs(theta) >= pi - tol
                     theta = pi;
                 end
                 SQ = (cos(theta).*sqrt(sum((edgePts(j,:)-C).^2))).^2 - sum((edgePts(j,:)-C).^2) + r^2;
                 dMv = sqrt(sum((edgePts(j,:)-C).^2))*cos(theta) + sqrt(SQ);
-                y = edgePts(j,:) + dMv.*gamma;
+                y = edgePts(j,:) + dMv.*gamma;%ptch.R(ptchId(j,:)) = sqrt((dMv + sqrt(sum((midPt(j,:)-edgePts(j,:)).^2))).^2 + sqrt(sum((ptch.C(ptchId(j,1),:)-midPt(j,:)).^2)));
                 ptch.R(ptchId(j,:)) = sqrt(sum((y - ptch.C(ptchId(j,1),:)).^2));
             end
         end
@@ -695,4 +708,6 @@ function dataY = movePts(dataX,dataY)
         end
         dataY.nodes(dataY.bnd,:) = xeBnd;
     end
+end
+
 end
