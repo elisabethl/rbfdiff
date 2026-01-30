@@ -10,7 +10,9 @@
 %
 % Input:  ndiff  integer corresponding to the number of desired derivatives.
 %                0 = func eval, 1 = gradient, 1.5 = Laplacian, 2 = Hessian,
-%                4,6,... = higher order Laplacians, not implemented yet. 
+%                3, 4 = third and fourth order derivatives, implemented for
+%                some basis functions 3.5, 5.5, 7.5,6 = higher order Laplacians,
+%                only implemented for some basis functions. 
 %
 %         xe     double(M,dim) the M evaluation points where the derivative
 %                should be computed. Could also be Te, which for rbfqr keeps
@@ -26,6 +28,10 @@
 %                for computing a derivative Lu of the RBF approximation u at
 %                xe as Lu = B*u,
 %                where u are the N nodal values at the center points xc.
+%                Note the higher derivatives are stored such that B{i,j,k} gives
+%                the ijk-derivative, which each index taking values from 1..d.
+%                However, values are returned only for k>=j>=i, since the other
+%                combinations are redundant.
 %
 % Example:       Compute the Laplacian of sin(x*y) over 100
 %                Halton points in [0,1]x[0,1];
@@ -49,6 +55,34 @@
 %		       Andreas Michael <andreas.michael@it.uu.se >
 % -------------------------------------------------------------------------
 function [B,Te] = RBFDiffMat(ndiff,Psi,xTe)
+%
+% Check that the input ndiff is compatible with what is implemented
+%
+ndiff = round(2*ndiff)/2; % Only integer and half integer values are ok
+errstr = ['Derivative ' num2str(ndiff) ' is not implemented for ' Psi.phi];
+if (ndiff < 0 | ndiff > 7.5)
+    error(errstr)
+end    
+switch Psi.phi
+  case 'rbfqr'
+    if (ndiff > 2)
+        if (dim<3 | ~any(2*ndiff==2*[4 6 8]-1))
+            error(errstr)
+        end
+    end
+  case {'gs','mq','iq','bmp'}
+    if (ndiff > 4)
+        error(errstr)
+    end
+  case 'phs'
+    if (ndiff>Psi.ep) % Psi.ep is the order of the phs
+        error(errstr)
+    end
+  case 'w2'
+    if (ndiff>2)
+        error(errstr)
+    end
+end
 
 if strcmp(Psi.phi,'rbfqr')
     dim = size(Psi.xk,2);
@@ -102,7 +136,7 @@ else
     %
     % Now organize the output
     %
-    if (ndiff==0 | ndiff==1.5)
+    if (ndiff==0 | ndiff==1.5 | ndiff==3.5 | ndiff==5.5 | ndiff==7.5)
         B = Bout{1};
     elseif (ndiff==1)
         B = Bout;
@@ -114,6 +148,28 @@ else
             else
                 B{opDim{k}(1),opDim{k}(2)} = Bout{k};
                 B{opDim{k}(2),opDim{k}(1)} = Bout{k};
+            end
+        end
+    elseif (ndiff==3)
+        clear B
+        % We only return the non-redundant upper triangular part of derivatives
+        for k = 1:length(op)
+            opDim{k} = sort(opDim{k});
+            if length(opDim{k}) == 1 
+                B{opDim{k},opDim{k},opDim{k}} = Bout{k};
+            else % Then length = 3
+                B{opDim{k}(1),opDim{k}(2),opDim{k}(3)} = Bout{k};
+            end
+        end
+    elseif (ndiff==4)
+        clear B
+        % We only return the non-redundant upper triangular part of derivatives
+        for k = 1:length(op)
+            opDim{k} = sort(opDim{k});
+            if length(opDim{k}) == 1 
+                B{opDim{k},opDim{k},opDim{k},opDim{k}} = Bout{k};
+            else
+                B{opDim{k}(1),opDim{k}(2),opDim{k}(3),opDim{k}(4)} = Bout{k};
             end
         end
     end    
@@ -149,14 +205,78 @@ elseif (ndiff==2)
             pos = pos + 1;
         end    
     end
-elseif (ndiff > 2)
-    if mod(ndiff,2)==0 % Even values for higher order Laplacian
-                       
-        op{1} = strcat('L',num2str(ndiff/2));
-        opDim{k} = 1;
-        %
-        % Add code here
-        %
+elseif (ndiff==3)
+    pos = 1;
+    for k=1:dim
+        op{pos} = '3';
+        opDim{pos} = k;
+        derVec{pos} = 3*I(k,:);
+        pos = pos + 1;
+        for j=k:dim % Allowing for two derivatives in one coordinate
+            for ell = k+1:dim % But the third needs to be different 
+                op{pos} = 'm3';
+                opDim{pos} = [k j ell];
+                derVec{pos} = I(k,:) + I(j,:) + I(ell,:);
+                pos = pos + 1;
+            end    
+        end
+    end
+elseif (ndiff==4)
+    pos = 1;
+    for k=1:dim
+        op{pos} = '4';
+        opDim{pos} = k;
+        derVec{pos} = 4*I(k,:);
+        pos = pos + 1;
+        for j=k:dim
+            for ell=k:dim
+                for m=k+1:dim % Last derivative cannot be k
+                    op{pos} = 'm4';
+                    opDim{pos} = [j k ell m];
+                    derVec{pos} = I(k,:) + I(j,:) + I(ell,:) + I(m,:);
+                    pos = pos + 1;
+                end
+            end
+        end    
+    end
+elseif (ndiff == 3.5)
+    op{1} = 'L2'; % The squared Laplacian
+    opDim{1} = dim;
+    derVec{1} = zeros(0,dim);
+    % This is slightly inefficient for the polynomial part since mixed
+    % terms appear twice, but ok.
+    for k=1:dim 
+        for j=1:dim
+            derVec{1} = [derVec{1}; 2*I(k,:) + 2*I(j,:)];
+        end    
+    end    
+elseif (ndiff == 5.5)
+    op{1} = 'L3'; % The cubed Laplacian
+    opDim{1} = dim;
+    derVec{1} = zeros(0,dim);
+    % This is slightly inefficient for the polynomial part since mixed
+    % terms appear twice, but ok.
+    for k=1:dim 
+        for j=1:dim
+            for ell=1:dim
+                derVec{1} = [derVec{1}; 2*I(k,:) + 2*I(j,:) + 2*I(ell,:)];
+            end    
+        end    
+    end    
+elseif (ndiff == 7.5)
+    op{1} = 'L4'; % The squared-squared Laplacian
+    opDim{1} = dim;
+    derVec{1} = zeros(0,dim);
+    % This is slightly inefficient for the polynomial part since mixed
+    % terms appear twice, but ok.
+    for k=1:dim 
+        for j=1:dim
+            for ell=1:dim
+                for m=1:dim
+                    derVec{1} = [derVec{1}; 2*I(k,:) + 2*I(j,:) + 2*I(ell,:) + 2*I(m,:)];
+                end    
+            end    
+        end    
     end    
 end
 
