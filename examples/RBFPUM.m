@@ -7,13 +7,13 @@ setPaths;
 %
 dim = 2;                            % dim = 1,2 or 3
 display = 1;                        % Plot solution
-geom = 'ball';                      % ball or cube
-mode = 'collocation';                  % fitted, unfitted or collocation
+geom = 'cube';                      % ball or cube
+mode = 'unfitted';                  % fitted, unfitted or collocation
 bcMode = 'weak';                    % strong or weak imposition of boundary conditions (only relevant for fitted)
 scaling = 1;                        % Include scaling of the unfitted LS problem
 mvCentres = 1;                      % Option to have a Y point on top of all X points inside the domain
 q = 3;                              % Oversampling
-N = 6;                             % Number of center points (X) in each patch
+N = 15;                             % Number of center points (X) in each patch
 P = 100;                            % Number of patches
 
 ep = 0.1;                             % For 'phs': order of spline, 'mq', 'gs', 'iq', 'rbfqr': shape parameter, 'w2', 'bump': radius
@@ -21,7 +21,7 @@ phi = 'rbfqr';                        % Choice of basis 'phs', 'mq', 'gs', 'iq',
 
 psi = 'w2';                % Weight function: w2 or bmp
 pdeg = -1;                           % Polynomial extension, not relevant for 'rbfqr'
-del = 0.4;                          % Overlap between patches
+del = 0.1;                          % Overlap between patches
 %
 % Place P patches and M evaluation points in geom with centre C and radius R
 %
@@ -549,22 +549,28 @@ function ptch = getPtch(geom,P,C,R,del)
     end
     dimLCoeff = [1 sqrt(2)/2 sqrt(3)/3];              % constants for getting cube side length /2
     ptch.R = (2*Rsq)/((2-del)*ceil(P^(1/dim)) - del); % Ensure overlap in cartesian domain (Along diagonal)
+    %
+    % Place centres on grid 
+    %
     if dim == 1
-        Cx = linspace(-1+dimLCoeff(dim)*(1-del)*ptch.R,1-dimLCoeff(dim)*(1-del)*ptch.R,ceil(P^(1/dim)));
+        Cx = linspace((-Rsq+(1-del)*ptch.R)*dimLCoeff(dim),(Rsq-(1-del)*ptch.R)*dimLCoeff(dim),ceil(P^(1/dim)));
         ptch.C = Cx(:);
     elseif dim == 2
-        Cx = linspace(-1+dimLCoeff(dim)*(1-del)*ptch.R,1-dimLCoeff(dim)*(1-del)*ptch.R,ceil(P^(1/dim)));
-        Cy = linspace(-1+dimLCoeff(dim)*(1-del)*ptch.R,1-dimLCoeff(dim)*(1-del)*ptch.R,ceil(P^(1/dim)));
+        Cx = linspace((-Rsq+(1-del)*ptch.R)*dimLCoeff(dim),(Rsq-(1-del)*ptch.R)*dimLCoeff(dim),ceil(P^(1/dim)));
+        Cy = linspace((-Rsq+(1-del)*ptch.R)*dimLCoeff(dim),(Rsq-(1-del)*ptch.R)*dimLCoeff(dim),ceil(P^(1/dim)));
         [Cx,Cy] = meshgrid(Cx,Cy);
         ptch.C = [Cx(:),Cy(:)];
     elseif dim == 3
-        Cx = linspace(-1+dimLCoeff(dim)*(1-del)*ptch.R,1-dimLCoeff(dim)*(1-del)*ptch.R,ceil(P^(1/dim)));
-        Cy = linspace(-1+dimLCoeff(dim)*(1-del)*ptch.R,1-dimLCoeff(dim)*(1-del)*ptch.R,ceil(P^(1/dim)));
-        Cz = linspace(-1+dimLCoeff(dim)*(1-del)*ptch.R,1-dimLCoeff(dim)*(1-del)*ptch.R,ceil(P^(1/dim)));
+        Cx = linspace((-Rsq+(1-del)*ptch.R)*dimLCoeff(dim),(Rsq-(1-del)*ptch.R)*dimLCoeff(dim),ceil(P^(1/dim)));
+        Cy = linspace((-Rsq+(1-del)*ptch.R)*dimLCoeff(dim),(Rsq-(1-del)*ptch.R)*dimLCoeff(dim),ceil(P^(1/dim)));
+        Cz = linspace((-Rsq+(1-del)*ptch.R)*dimLCoeff(dim),(Rsq-(1-del)*ptch.R)*dimLCoeff(dim),ceil(P^(1/dim)));
         [Cx,Cy,Cz] = meshgrid(Cx,Cy,Cz);
         ptch.C = [Cx(:),Cy(:),Cz(:)];
     end
     ptch.R = ptch.R*ones(size(ptch.C,1),1);
+    %
+    % If geometry is a ball remove patches outside the domain
+    %
     if strcmp(geom,"ball")
         tol = 1e-6;
         % Remove patches with centres that are outside the domain
@@ -576,11 +582,9 @@ function ptch = getPtch(geom,P,C,R,del)
         % Find points of intersection between patches (2 patches in 2D and 4 in 3D)
         edgePts = [];
         midPt = [];
-        dirEdgePt = [];
         ptchId = [];
         for i = 1:size(idNei,1)
             neiTemp = idNei{i};
-            distTemp = distNei{i};
             % All possible patch combinations in neighbourhood, groups of 2 in 2D and 4 in 3D.
             ptchComb = [nchoosek(neiTemp(2:end),2^(dim-1) - 1)];
             ptchComb = [ones(size(ptchComb,1),1).*neiTemp(1), ptchComb];
@@ -596,8 +600,8 @@ function ptch = getPtch(geom,P,C,R,del)
                     keep = 1;
                 else
                     t = cross(tempDir(1,:),tempDir(2,:));
-                    keep = ~dot(t,tempDir(end,:));
                     t2 = cross(tempDir(1,:),-tempDir(2,:));
+                    keep = ~dot(t,tempDir(end,:));
                 end
                 if keep % In 3D some combinations of patch centres do not form a plane
                     tempL = sqrt((ptch.R(1)^2)-(max(tempDist)/2)^2);
@@ -624,8 +628,7 @@ function ptch = getPtch(geom,P,C,R,del)
         for j = 1:size(edgePts,1)
             if isempty(find(ptPtchList(j,:))) && sqrt(sum((edgePts(j,:)-C).^2)) <= R + del*ptch.R(ptchId(j,1),:)
                 r = R + del*ptch.R(ptchId(j,1)); 
-                % Direction along which edge point will move when pacthes
-                % are equaly extended
+                % Direction along which edge point will move when patch sizes increase
                 gamma = (-midPt(j,:)+edgePts(j,:))./sqrt(sum((edgePts(j,:)-midPt(j,:)).^2)); 
                 theta = acos(dot(((C-edgePts(j,:))./sqrt(sum((edgePts(j,:)-C).^2))),gamma));
                 if abs(theta) <= pi + tol && abs(theta) >= pi - tol % In case gamma direction is towards the centre of the domain
