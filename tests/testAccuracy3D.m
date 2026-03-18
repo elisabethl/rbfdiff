@@ -1,4 +1,4 @@
-addpath oldqrcode
+addpath tests/oldqrcode
 % Compare the differentiation accuracy between the old and new implementations
 clear
 close all
@@ -9,7 +9,7 @@ ep = 0.1;
 dim = 3;
 N = 56;
 Ne = 200;
-ttype = 1;
+ttype = 2;
 if (ttype==1)
     r = logspace(-16,-5,Ne)'; % For errors near r=0
     rplot = r;
@@ -96,7 +96,7 @@ H = loglog(rplot,abs(errL),'-',rplot,abs(errLO),'--');
 set(H,'LineWidth',1.5)
 adjustFigProp
 xlabel(rstr,'interpreter','latex')
-title(['Error in Laplacian, $N=$' num2str(N) ', $\varepsilon=$' num2str(ep)],'Interpreter','latex')
+title(['Error in Laplacian, $n=' num2str(N) '$, $\varepsilon=' num2str(ep),'$'],'Interpreter','latex')
 
 % In title, we want ep, 
 function adjustFigProp()
