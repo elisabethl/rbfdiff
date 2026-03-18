@@ -8,11 +8,11 @@ setPaths;
 dim = 2;                            % dim = 1,2 or 3
 display = 1;                        % Plot solution
 geom = 'ball';                      % ball or cube
-mode = 'unfitted';                  % fitted, unfitted or collocation
+mode = 'collocation';                  % fitted, unfitted or collocation
 scaling = 1;                        % Include scaling of the unfitted LS problem
 mvCentres = 1;                      % Option to have a Y point on top of all X points inside the domain
 q = 3;                              % Oversampling
-N = 500;                            % Number of center points (X)
+N = 100;                            % Number of center points (X)
 ep = 3;                             % For 'phs': order of spline, 'mq', 'gs', 'iq', 'rbfqr': shape parameter, 'w2', 'bump': radius
 phi = 'phs';                        % Choice of basis 'phs', 'mq', 'gs', 'iq', 'rbfqr', 'w2', 'bmp'
 pdeg = 4;                           % Polynomial extension, not relevant for 'rbfqr'
@@ -137,9 +137,9 @@ end
 %
 % LS problem scaling
 %
+[~,dist] = knnsearch(xc,xc,'K',2);
+h = max(dist(:,2));
 if scaling && strcmp(mode,"unfitted")
-    [~,dist] = knnsearch(xc,xc,'K',2);
-    h = max(dist(:,2));
     Lscale = sqrt(dataY.Vol/length(dataY.inner));
     Bscale = sqrt(dataY.Area/length(dataY.bnd))*(h.^-1.5);
     L = Lscale.*L; B = Bscale.*B;
